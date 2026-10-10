@@ -217,6 +217,11 @@ void Session::debugStartAt(const int column)
     }
 }
 
+void Session::debugPlace(const Cell cell)
+{
+    spawnHero(map().cellBottom(cell));
+}
+
 void Session::spawnHero(const Vec2 feet)
 {
     m_hero.body = {};
@@ -456,7 +461,7 @@ void Session::stepHero(const Input& input)
         }
     }
     h.running = input.runHeld;
-    const gamelib::core::PlatformerTuning tuning = tuningFor(input.runHeld, body.velocity.x, downhill, area.theme == Theme::Ice);
+    const gamelib::core::PlatformerTuning tuning = tuningFor(input.runHeld, body.velocity.x, downhill, area.theme == Theme::Ice && body.ridingId < 0); // lifts are not icy
 
     std::vector<gamelib::core::MovingPlatform> platforms;
     for (const Platform& p : area.platforms) {

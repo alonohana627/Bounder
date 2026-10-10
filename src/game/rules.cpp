@@ -59,9 +59,8 @@ gamelib::core::PlatformerTuning tuningFor(const bool running, const float speedX
     t.groundAccel = running ? 0.075f : 0.06f;
     t.groundDecel = 0.12f;
     if (icy) {
-        // Ice: slow to start, slower to stop.
-        t.groundAccel *= 0.45f;
-        t.groundDecel = 0.025f;
+        // Ice: slow to stop and to turn round.
+        t.groundDecel = 0.05f;
     }
     t.airAccel = 0.065f;
     t.airDecel = 0.03f; // momentum carries through the air

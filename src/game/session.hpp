@@ -229,6 +229,8 @@ public:
     // A developer's start further into the level (BOUNDER_START_COLUMN):
     // the hero stands on the highest floor of that column.
     void debugStartAt(int column);
+    // A developer's start standing on the floor of a cell (tests).
+    void debugPlace(gamelib::core::Cell cell);
 
     [[nodiscard]] int level() const { return m_level; }
     [[nodiscard]] const LevelDef& def() const { return game::level(m_level); }

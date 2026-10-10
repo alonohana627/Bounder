@@ -8,8 +8,11 @@ add_library(bounder_game STATIC
     demo_bot.cpp
     enemies.cpp
     levels.cpp
-    levels_placeholder.cpp
+    levels_castle.cpp
     levels_w1.cpp
+    levels_w2.cpp
+    levels_w3.cpp
+    levels_w4.cpp
     overworld.cpp
     rules.cpp
     session.cpp)

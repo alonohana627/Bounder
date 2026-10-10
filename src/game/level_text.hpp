@@ -16,6 +16,7 @@ using Segment = std::vector<std::string_view>;
 // and room to walk into the castle) and a boss arena (its gate column 'z',
 // the boss 'Z', two ledges).
 extern const Segment kGoalSegment;
+extern const Segment kGoalTallSegment; // the same for 30-row levels
 extern const Segment kArenaSegment;
 
 [[nodiscard]] std::vector<LevelDef> worldOneLevels();
@@ -23,8 +24,6 @@ extern const Segment kArenaSegment;
 [[nodiscard]] std::vector<LevelDef> worldThreeLevels();
 [[nodiscard]] std::vector<LevelDef> worldFourLevels();
 [[nodiscard]] LevelDef castleLevel();
-// A short fortress with its boss arena (until every world is written).
-[[nodiscard]] LevelDef placeholderFortress(std::string_view id, int world);
 
 // Every level in campaign order (4 x 5, then the castle).
 [[nodiscard]] std::vector<LevelDef> buildLevels();
