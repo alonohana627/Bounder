@@ -1,8 +1,8 @@
 # bounder_game: the rules - levels, the hero (GameLib's platformer controller
 # with Bounder's walk/run tuning), blocks, power-ups, enemies, bosses, pipes,
 # platforms, the overworld's paths and the demo bot. Depends only on
-# GameLib::core: no window, GPU, audio or clock, deterministic for the
-# per-tick input.
+# GameLib::core and GameLib::ai (the demo bot's planner): no window, GPU,
+# audio or clock, deterministic for the per-tick input.
 add_library(bounder_game STATIC
     boss.cpp
     demo_bot.cpp
@@ -17,5 +17,5 @@ add_library(bounder_game STATIC
     rules.cpp
     session.cpp)
 target_include_directories(bounder_game PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
-target_link_libraries(bounder_game PUBLIC GameLib::core)
+target_link_libraries(bounder_game PUBLIC GameLib::core GameLib::ai)
 gamelib_target_warnings(bounder_game)

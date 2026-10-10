@@ -18,8 +18,10 @@
 #include <gamelib/ai/attract.hpp>
 #include <gamelib/app/app.hpp>
 #include <gamelib/app/arcade_menus.hpp>
+#include <gamelib/app/dev_start.hpp>
 #include <gamelib/core/replay.hpp>
 #include <gamelib/audio/sound_bank.hpp>
+#include <gamelib/fx/banners.hpp>
 #include <gamelib/fx/debug_overlay.hpp>
 #include <gamelib/fx/transients.hpp>
 #include <gamelib/ui/transition.hpp>
@@ -54,11 +56,6 @@ private:
         int attempts = 0;
         int generation = 0; // bumped on every new attempt, so the view snaps
     };
-    struct Banner {
-        std::string title;
-        std::string line;
-        gamelib::core::Color color;
-    };
     // The card shown while a transition covers the screen.
     struct Card {
         std::string title;
@@ -66,7 +63,7 @@ private:
         int lives = 0;
     };
 
-    void handleResult(gamelib::app::App& app, const gamelib::app::ArcadeResult& result, gamelib::app::ArcadeScreen before);
+    void handleResult(gamelib::app::App& app, const gamelib::app::ArcadeResult& result);
     void mapCommand(gamelib::app::App& app, MapCommand command);
     void enterMap(gamelib::app::App& app);
     void startLevel(gamelib::app::App& app, int level, const game::Carry& carry, bool iris);
@@ -119,6 +116,7 @@ private:
     float m_clearTimer = -1.0f;   // seconds until the course-clear returns to the map
     bool m_gameOver = false;
     bool m_starMusic = false;
+    gamelib::app::DevStart m_dev; // BOUNDER_START_LEVEL, BOUNDER_START_COLUMN, BOUNDER_REPLAY
     int m_startLevel = -1;        // BOUNDER_START_LEVEL: PLAY goes straight into a level
     // BOUNDER_REPLAY: a recording (core::InputRecording text) that drives the
     // level started with BOUNDER_START_LEVEL instead of the keys, to watch a
@@ -132,7 +130,7 @@ private:
     int m_demoGeneration = -1;
     bool m_demoMode = false;
 
-    gamelib::fx::Transients<Banner> m_banners;
+    gamelib::fx::Banners m_banners;
     gamelib::fx::DebugOverlay m_debug;
     float m_time = 0.0f;
     float m_endingTime = 0.0f;

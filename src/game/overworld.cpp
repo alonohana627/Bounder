@@ -1,7 +1,5 @@
 #include "overworld.hpp"
 
-#include <gamelib/core/grid_search.hpp>
-
 #include <array>
 #include <stdexcept>
 #include <string_view>
@@ -68,42 +66,28 @@ constexpr std::array<MapRows, kWorlds> kMaps{{
      "~~~~~~~~~~~~~~~~~~~~~~~~"},
 }};
 
-bool _isPath(const char c)
-{
-    return c == '-' || c == '|' || c == '+';
-}
-
 WorldMap _build(const int world)
 {
     const MapRows& rows = kMaps[static_cast<std::size_t>(world)];
-    WorldMap map{.world = world, .tiles = gamelib::core::gridFromText(rows, [](const char c) { return c; }), .nodes = {}};
+    const auto isNode = [](const char c) { return std::string_view{"S<>1234FC"}.contains(c); };
+    const auto isPath = [](const char c) { return c == '-' || c == '|' || c == '+'; };
+    WorldMap map{.world = world, .paths = gamelib::core::NodeMap::fromText(rows, isNode, isPath), .nodes = {}, .start = -1};
     const int first = world * kLevelsPerWorld;
-    const auto add = [&](const MapNode node) {
-        if (node.kind == NodeKind::Start || node.kind == NodeKind::PrevWorld) {
-            map.nodes.insert(map.nodes.begin(), node);
-        } else {
-            map.nodes.push_back(node);
+    for (const Cell cell : map.paths.nodes()) {
+        const char c = map.paths.cells().at(cell);
+        switch (c) {
+        case 'S': map.nodes.push_back({.kind = NodeKind::Start, .cell = cell}); break;
+        case '<': map.nodes.push_back({.kind = NodeKind::PrevWorld, .cell = cell}); break;
+        case '>': map.nodes.push_back({.kind = NodeKind::NextWorld, .cell = cell}); break;
+        case 'F': map.nodes.push_back({.kind = NodeKind::Level, .cell = cell, .level = first + 4}); break;
+        case 'C': map.nodes.push_back({.kind = NodeKind::Level, .cell = cell, .level = kCastleLevel}); break;
+        default: map.nodes.push_back({.kind = NodeKind::Level, .cell = cell, .level = first + (c - '1')}); break;
         }
-    };
-    for (int y = 0; y < map.tiles.height(); ++y) {
-        for (int x = 0; x < map.tiles.width(); ++x) {
-            const Cell cell{x, y};
-            const char c = map.tiles.at(cell);
-            switch (c) {
-            case 'S': add({.kind = NodeKind::Start, .cell = cell}); break;
-            case '<': add({.kind = NodeKind::PrevWorld, .cell = cell}); break;
-            case '>': add({.kind = NodeKind::NextWorld, .cell = cell}); break;
-            case '1':
-            case '2':
-            case '3':
-            case '4': add({.kind = NodeKind::Level, .cell = cell, .level = first + (c - '1')}); break;
-            case 'F': add({.kind = NodeKind::Level, .cell = cell, .level = first + 4}); break;
-            case 'C': add({.kind = NodeKind::Level, .cell = cell, .level = kCastleLevel}); break;
-            default: break;
-            }
+        if (c == 'S' || c == '<') {
+            map.start = static_cast<int>(map.nodes.size()) - 1;
         }
     }
-    if (map.nodes.empty() || (map.nodes.front().kind != NodeKind::Start && map.nodes.front().kind != NodeKind::PrevWorld)) {
+    if (map.start < 0) {
         throw std::logic_error{"Bounder: a world map without a start"};
     }
     return map;
@@ -130,12 +114,7 @@ bool nodeCleared(const MapNode& node, const int world, const IsCleared& cleared)
 
 int nodeAt(const WorldMap& map, const Cell cell)
 {
-    for (std::size_t i = 0; i < map.nodes.size(); ++i) {
-        if (map.nodes[i].cell == cell) {
-            return static_cast<int>(i);
-        }
-    }
-    return -1;
+    return map.paths.nodeAt(cell);
 }
 
 int nodeOfLevel(const WorldMap& map, const int level)
@@ -150,52 +129,15 @@ int nodeOfLevel(const WorldMap& map, const int level)
 
 gamelib::core::Grid<int> openCells(const WorldMap& map, const IsCleared& cleared)
 {
-    const std::array<Cell, 1> start{map.nodes.front().cell};
-    return gamelib::core::floodFill(map.tiles, start, gamelib::core::Neighbors::Four, [&](const Cell cell) {
-        const int node = nodeAt(map, cell);
-        if (node >= 0) {
-            // A node is reached; only a cleared one lets the fill go on.
-            return nodeCleared(map.nodes[static_cast<std::size_t>(node)], map.world, cleared)
-                       ? gamelib::core::Reach::Spread
-                       : gamelib::core::Reach::Stop;
-        }
-        return _isPath(map.tiles.at(cell)) ? gamelib::core::Reach::Spread : gamelib::core::Reach::Blocked;
+    return map.paths.openCells(map.start, [&](const int node) {
+        return nodeCleared(map.nodes[static_cast<std::size_t>(node)], map.world, cleared);
     });
 }
 
 std::optional<std::vector<Cell>> route(const WorldMap& map, const int from, const Direction direction,
                                        const IsCleared& cleared)
 {
-    const gamelib::core::Grid<int> open = openCells(map, cleared);
-    Cell at = map.nodes.at(static_cast<std::size_t>(from)).cell;
-    Cell next = gamelib::core::neighbor(at, direction);
-    if (!map.tiles.inside(next) || open.at(next) < 0) {
-        return std::nullopt;
-    }
-    std::vector<Cell> cells;
-    Cell previous = at;
-    // Follow the path through its bends to the next node.
-    for (int guard = 0; guard < map.tiles.width() * map.tiles.height(); ++guard) {
-        cells.push_back(next);
-        if (nodeAt(map, next) >= 0) {
-            return cells;
-        }
-        bool moved = false;
-        for (const Direction d : gamelib::core::kDirections) {
-            const Cell candidate = gamelib::core::neighbor(next, d);
-            if (candidate == previous || !map.tiles.inside(candidate) || open.at(candidate) < 0) {
-                continue;
-            }
-            previous = next;
-            next = candidate;
-            moved = true;
-            break;
-        }
-        if (!moved) {
-            return std::nullopt;
-        }
-    }
-    return std::nullopt;
+    return map.paths.route(from, direction, openCells(map, cleared));
 }
 
 } // namespace bounder::game

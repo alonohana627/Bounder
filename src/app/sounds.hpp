@@ -6,10 +6,12 @@
 
 #include <gamelib/audio/music.hpp>
 #include <gamelib/audio/player.hpp>
+#include <gamelib/audio/sound_bank.hpp>
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 namespace bounder::app {
@@ -57,20 +59,12 @@ inline constexpr std::size_t kTuneCount = static_cast<std::size_t>(Tune::Count);
 // The tunes with a hurry-up take: the level themes (Grass .. Bonus).
 inline constexpr std::size_t kHurryTunes = 6;
 
-[[nodiscard]] gamelib::audio::Song song(Tune tune, bool hurry);
+// Take 0 of a tune, or take 1 (the hurry-up take, a quarter faster) of the
+// level themes; nullopt for a take a tune does not have.
+[[nodiscard]] std::optional<gamelib::audio::Song> tuneTake(Tune tune, int take);
+inline constexpr int kHurryTake = 1;
 
-// The rendered tunes, registered as music tracks.
-class Music {
-public:
-    explicit Music(gamelib::audio::Player& player);
-    // Crossfades to a tune (its hurry-up take if asked and it has one);
-    // nothing if it already plays.
-    void play(gamelib::audio::Player& player, Tune tune, bool hurry = false, float fadeSeconds = 0.6f) const;
-    void stop(gamelib::audio::Player& player) const;
-
-private:
-    std::array<gamelib::audio::SoundId, kTuneCount> m_tracks{};
-    std::array<gamelib::audio::SoundId, kHurryTunes> m_hurry{};
-};
+// The rendered tunes and their hurry-up takes.
+using Music = gamelib::audio::MusicBank<Tune, kTuneCount>;
 
 } // namespace bounder::app

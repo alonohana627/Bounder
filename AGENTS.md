@@ -96,6 +96,9 @@ pipe and return to the k-th 'O' pipe.
 - `BOUNDER_REPLAY=<file>`: a recording (`core::InputRecording` text, the
   four-character inputs of `rules.hpp`) drives the level started with
   `BOUNDER_START_LEVEL`, to watch a proven route and the ending.
+  These are GameLib's `app::readDevStart("BOUNDER")`.
+- `--keep-running` (GameLib's self-test switch): the game keeps running
+  without focus, for screenshot scripts that drive a background window.
 - Every level is proven finishable (goal and star coins) by a beam search
   over the real `Session` kept outside the repository; tall levels need
   waypoints for their lifts.

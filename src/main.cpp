@@ -3,14 +3,13 @@
 // Command line: --demo (the demo bot plays world 1 full screen) plus
 // GameLib's self-test switches (--frames N --hidden --require-validation
 // --no-vsync --allow-software --resize-at-frame N --minimize-at-frame N
-// --focus-loss-at-frame N).
+// --focus-loss-at-frame N --keep-running).
 #include "bounder_game.hpp"
 #include "profile.hpp"
 #include "rules.hpp"
 
 #include <gamelib/app/app.hpp>
 
-#include <cstdlib>
 #include <memory>
 #include <utility>
 
@@ -31,9 +30,6 @@ int main(int argc, char** argv)
         .gameFlags = {"--demo"},
     };
     config.renderer.vsync = profile.value().settings.vsync;
-    if (std::getenv("BOUNDER_KEEP_RUNNING") != nullptr) {
-        config.pauseOnFocusLoss = false; // automated screenshot runs drive a background window
-    }
     return gamelib::app::runMain(argc, argv, config, [&](gamelib::app::App& app) {
         return std::make_unique<bounder::app::BounderGame>(app, std::move(profile), app.hasFlag("--demo"));
     });

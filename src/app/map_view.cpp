@@ -25,16 +25,7 @@ constexpr float kCell = 64.0f;
 
 Vec2 _origin(const game::WorldMap& map, const gamelib::core::Size canvas)
 {
-    return {(static_cast<float>(canvas.width) - static_cast<float>(map.tiles.width()) * kCell) / 2.0f, 128.0f};
-}
-
-bool _joins(const game::WorldMap& map, const Cell cell)
-{
-    if (!map.tiles.inside(cell)) {
-        return false;
-    }
-    const char c = map.tiles.at(cell);
-    return c == '-' || c == '|' || c == '+' || game::nodeAt(map, cell) >= 0;
+    return {(static_cast<float>(canvas.width) - static_cast<float>(map.paths.cells().width()) * kCell) / 2.0f, 128.0f};
 }
 
 std::string _levelLine(const gamelib::core::Campaign& campaign, const int level)
@@ -63,8 +54,8 @@ void drawMap(gamelib::draw::DrawList& list, const Shapes& shapes, const game::Wo
     list.vignette({0.0f, 0.0f, static_cast<float>(canvas.width), static_cast<float>(canvas.height)},
                   pal[Role::SkyTop].scaled(0.8f), 1.2f, 0.5f);
     // The map's board with a shadow and a border.
-    const Rect board{origin.x, origin.y, static_cast<float>(map.tiles.width()) * kCell,
-                     static_cast<float>(map.tiles.height()) * kCell};
+    const Rect board{origin.x, origin.y, static_cast<float>(map.paths.cells().width()) * kCell,
+                     static_cast<float>(map.paths.cells().height()) * kCell};
     const Rect shadow = board.expanded(14.0f);
     list.box({shadow.x + 8.0f, shadow.y + 10.0f, shadow.width, shadow.height}, Color{0.0f, 0.0f, 0.0f, 0.3f}, {.cornerRadius = 28.0f});
     list.box(board.expanded(14.0f), pal[Role::MapDetail].scaled(0.6f), {.cornerRadius = 28.0f});
@@ -76,10 +67,10 @@ void drawMap(gamelib::draw::DrawList& list, const Shapes& shapes, const game::Wo
     // Water, or in the sky world a sea of cloud.
     const Color water = theme == game::Theme::Sky ? pal[Role::SkyLow] : Color{0.25f, 0.55f, 0.95f, 1.0f};
     const Color waterLight = theme == game::Theme::Sky ? Color{1.0f, 1.0f, 1.0f, 1.0f} : water.scaled(1.4f);
-    for (int y = 0; y < map.tiles.height(); ++y) {
-        for (int x = 0; x < map.tiles.width(); ++x) {
+    for (int y = 0; y < map.paths.cells().height(); ++y) {
+        for (int x = 0; x < map.paths.cells().width(); ++x) {
             const Cell c{x, y};
-            const char ch = map.tiles.at(c);
+            const char ch = map.paths.cells().at(c);
             if (ch == '~') {
                 list.add({.rect = cellRect(c), .color = water, .color2 = waterLight, .shape = shapes.map,
                           .params = {3.0f, 0.0f, 0.0f, 0.0f}});
@@ -90,10 +81,10 @@ void drawMap(gamelib::draw::DrawList& list, const Shapes& shapes, const game::Wo
         }
     }
     list.setLayer(gamelib::draw::layers::TilesBehind + 10);
-    for (int y = 0; y < map.tiles.height(); ++y) {
-        for (int x = 0; x < map.tiles.width(); ++x) {
+    for (int y = 0; y < map.paths.cells().height(); ++y) {
+        for (int x = 0; x < map.paths.cells().width(); ++x) {
             const Cell c{x, y};
-            const char ch = map.tiles.at(c);
+            const char ch = map.paths.cells().at(c);
             if (ch == 't') {
                 list.add({.rect = cellRect(c), .color = pal[Role::Bush], .color2 = pal[Role::BushLight], .shape = shapes.map,
                           .params = {1.0f, 0.0f, 0.0f, 0.0f}});
@@ -101,16 +92,10 @@ void drawMap(gamelib::draw::DrawList& list, const Shapes& shapes, const game::Wo
                 list.add({.rect = cellRect(c), .color = pal[Role::Block], .color2 = pal[Role::Block].scaled(1.3f),
                           .shape = shapes.map, .params = {2.0f, 0.0f, 0.0f, 0.0f}});
             }
-            if (!_joins(map, c)) {
+            if (!map.paths.isPath(c) && map.paths.nodeAt(c) < 0) {
                 continue;
             }
-            std::uint64_t sides = 0;
-            const std::array<Cell, 4> around{Cell{0, -1}, Cell{1, 0}, Cell{0, 1}, Cell{-1, 0}};
-            for (std::size_t i = 0; i < around.size(); ++i) {
-                if (_joins(map, c + around[i])) {
-                    sides |= 1u << i;
-                }
-            }
+            const std::uint64_t sides = map.paths.joins(c); // N, E, S, W bits
             const bool isOpen = open.at(c) >= 0;
             list.add({.rect = cellRect(c), .color = gamelib::core::srgb(0xF4E6C2), .color2 = gamelib::core::srgb(0xB8925A),
                       .shape = shapes.map, .params = {4.0f, isOpen ? 1.0f : 0.0f, 0.0f, 0.0f}, .bits = sides});

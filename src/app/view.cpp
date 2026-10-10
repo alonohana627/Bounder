@@ -194,16 +194,15 @@ void LevelView::draw(gamelib::draw::DrawList& list, const Shapes& shapes, const 
         const gamelib::core::View2D view = m_camera.view(options.shake);
         list.setLayer(gamelib::draw::layers::Parallax + 50);
         for (const game::Hint& hint : session.def().hints) {
-            const Vec2 at = view.toCanvas(hint.at * kTile);
-            if (at.x < -600.0f || at.x > static_cast<float>(m_canvas.width) + 600.0f) {
+            const Vec2 at = hint.at * kTile;
+            const gamelib::draw::VectorTextStyle shadow{.size = 40.0f, .color = Color{1.0f, 1.0f, 1.0f, 0.55f}, .weight = 1.6f,
+                                                        .align = gamelib::draw::Align::Center};
+            if (!gamelib::draw::drawWorldText(list, view, m_canvas, at, hint.text, shadow, {2.0f, 3.0f})) {
                 continue;
             }
-            const gamelib::draw::VectorTextStyle style{.size = 40.0f, .color = Color{1.0f, 1.0f, 1.0f, 0.55f}, .weight = 1.6f,
-                                                       .align = gamelib::draw::Align::Center};
-            gamelib::draw::drawVectorText(list, hint.text, at.x + 2.0f, at.y + 3.0f, style);
-            gamelib::draw::drawVectorText(list, hint.text, at.x, at.y,
-                                          {.size = 40.0f, .color = gamelib::core::srgb(0x1A2A5E, 0.9f), .weight = 1.2f,
-                                           .align = gamelib::draw::Align::Center});
+            gamelib::draw::drawWorldText(list, view, m_canvas, at, hint.text,
+                                         {.size = 40.0f, .color = gamelib::core::srgb(0x1A2A5E, 0.9f), .weight = 1.2f,
+                                          .align = gamelib::draw::Align::Center});
         }
     }
     list.setView(m_camera.view(options.shake));

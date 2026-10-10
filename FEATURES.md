@@ -79,10 +79,10 @@ What Bounder does today, verified by running it. Updated with each feature.
   it; `--demo` shows the demo full screen.
 - A card with the level's name and the lives left before each attempt
   (an iris from the map, a fade after a death).
-- Pause (resume, settings, restart the level, main menu, quit), the game
-  over menu (back to the map with fresh lives; progress kept) and, after the
-  King, the ending with fireworks, the run's score, levels cleared, star
-  coins and the best score.
+- Pause (resume, settings, restart the level, exit to the map at no cost,
+  main menu, quit), the game over menu (back to the map with fresh lives;
+  progress kept) and, after the King, the ending with fireworks, the run's
+  score, levels cleared, star coins and the best score.
 - Teaching lines written into 1-1's sky.
 
 ## Look

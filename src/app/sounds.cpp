@@ -274,39 +274,17 @@ std::vector<float> renderSfx(const Sfx sfx, const std::uint32_t sampleRate)
     return gamelib::audio::renderMix(recipe.tracks, recipe.peakDb, sampleRate);
 }
 
-Song song(const Tune tune, const bool hurry)
+std::optional<Song> tuneTake(const Tune tune, const int take)
 {
+    if (take == 0) {
+        return _song(tune);
+    }
+    if (static_cast<std::size_t>(tune) >= kHurryTunes) {
+        return std::nullopt; // only the level themes hurry
+    }
     Song s = _song(tune);
-    if (hurry) {
-        s.bpm *= 1.25f; // the hurry-up take: the same song a quarter faster
-    }
+    s.bpm *= 1.25f; // the hurry-up take: the same song a quarter faster
     return s;
-}
-
-Music::Music(gamelib::audio::Player& player)
-{
-    for (std::size_t i = 0; i < kTuneCount; ++i) {
-        const gamelib::audio::RenderedSong rendered = gamelib::audio::renderSong(song(static_cast<Tune>(i), false), player.sampleRate());
-        m_tracks[i] = player.addMusic(rendered.samples, rendered.loopStart);
-    }
-    for (std::size_t i = 0; i < kHurryTunes; ++i) {
-        const gamelib::audio::RenderedSong rendered = gamelib::audio::renderSong(song(static_cast<Tune>(i), true), player.sampleRate());
-        m_hurry[i] = player.addMusic(rendered.samples, rendered.loopStart);
-    }
-}
-
-void Music::play(gamelib::audio::Player& player, const Tune tune, const bool hurry, const float fadeSeconds) const
-{
-    const auto index = static_cast<std::size_t>(tune);
-    const gamelib::audio::SoundId track = hurry && index < kHurryTunes ? m_hurry[index] : m_tracks[index < kTuneCount ? index : 0];
-    if (player.music() != track) {
-        player.playMusic(track, fadeSeconds);
-    }
-}
-
-void Music::stop(gamelib::audio::Player& player) const
-{
-    player.stopMusic(0.3f);
 }
 
 } // namespace bounder::app

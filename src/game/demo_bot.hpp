@@ -13,19 +13,26 @@
 #include "rules.hpp"
 #include "session.hpp"
 
+#include <gamelib/ai/planner.hpp>
+
+#include <optional>
+#include <span>
+
 namespace bounder::game {
 
 class DemoBot {
 public:
-    [[nodiscard]] Input next(const Session& session);
-
-private:
     struct Plan {
         int jumpTicks = 0; // hold jump this long from now (0: no jump)
         int waitTicks = 0; // stand still this long first
     };
 
-    [[nodiscard]] float rate(const Session& session, const Plan& plan) const;
+    [[nodiscard]] Input next(const Session& session);
+
+private:
+    // The best of `plans`, each tried on a copy of the session (GameLib's
+    // look-ahead planner).
+    [[nodiscard]] std::optional<gamelib::ai::PlanChoice> choose(const Session& session, std::span<const Plan> plans) const;
 
     int m_hold = 0;      // ticks left to keep jump held
     int m_wait = 0;      // ticks left standing still

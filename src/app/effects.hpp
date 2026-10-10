@@ -15,10 +15,11 @@
 #include <gamelib/draw/draw_list.hpp>
 #include <gamelib/fx/juice.hpp>
 #include <gamelib/fx/particles.hpp>
+#include <gamelib/fx/popups.hpp>
+#include <gamelib/fx/puffs.hpp>
 #include <gamelib/fx/sprite_motion.hpp>
 #include <gamelib/fx/transients.hpp>
 
-#include <string>
 
 namespace bounder::app {
 
@@ -45,24 +46,8 @@ public:
     [[nodiscard]] gamelib::core::Vec2 heroScale() const { return m_squash.scale(); }
 
 private:
-    struct Puff {
-        gamelib::core::Vec2 at;
-        gamelib::core::Vec2 drift;
-        float size = 3.0f;
-        gamelib::core::Color color;
-    };
-    struct Ring {
-        gamelib::core::Vec2 at;
-        float radius = 16.0f;
-        gamelib::core::Color color;
-    };
     struct CoinPop {
         gamelib::core::Vec2 at;
-    };
-    struct Popup {
-        gamelib::core::Vec2 at;
-        std::string text;
-        gamelib::core::Color color;
     };
     struct Spark {
         gamelib::core::Vec2 at;
@@ -70,14 +55,13 @@ private:
         gamelib::core::Color color;
     };
 
-    void puffs(gamelib::core::Vec2 at, int count, float spread, gamelib::core::Vec2 drift, gamelib::core::Color color);
     void sparks(gamelib::core::Vec2 at, int count, gamelib::core::Color color);
 
     gamelib::fx::Particles m_debris;
-    gamelib::fx::Transients<Puff> m_puffs;
-    gamelib::fx::Transients<Ring> m_rings;
+    gamelib::fx::Puffs m_puffs;
+    gamelib::fx::Rings m_rings;
     gamelib::fx::Transients<CoinPop> m_coins;
-    gamelib::fx::Transients<Popup> m_popups;
+    gamelib::fx::Popups m_popups;
     gamelib::fx::Transients<Spark> m_sparks;
     gamelib::fx::Fade m_flash{0.25f};
     gamelib::fx::Shake m_shake{0.35f, 16.0f};

@@ -35,18 +35,6 @@ Effects::Effects()
 {
 }
 
-void Effects::puffs(const Vec2 at, const int count, const float spread, const Vec2 drift, const Color color)
-{
-    for (int i = 0; i < count; ++i) {
-        const float offset = (static_cast<float>(i) - static_cast<float>(count - 1) / 2.0f) * spread;
-        m_puffs.add({.at = at + Vec2{offset, -1.0f},
-                     .drift = drift + Vec2{offset * 2.0f + m_rng.uniform(-5.0f, 5.0f), m_rng.uniform(-14.0f, -5.0f)},
-                     .size = m_rng.uniform(2.0f, 3.4f),
-                     .color = color},
-                    m_rng.uniform(0.3f, 0.45f));
-    }
-}
-
 void Effects::sparks(const Vec2 at, const int count, const Color color)
 {
     for (int i = 0; i < count; ++i) {
@@ -62,14 +50,14 @@ void Effects::onEvent(const game::Event& event, const game::Theme theme)
     const ThemePalette& pal = themePalette(theme);
     switch (event.kind) {
     case EventKind::Jump:
-        puffs(event.at, 2, 3.0f, {}, kDust);
+        m_puffs.burst(event.at, 2, 3.0f, {}, kDust);
         m_squash.kick(0.3f);
         break;
     case EventKind::Land:
-        puffs(event.at, 3, 3.5f, {}, kDust);
+        m_puffs.burst(event.at, 3, 3.5f, {}, kDust);
         m_squash.kick(-0.3f);
         break;
-    case EventKind::Skid: puffs(event.at, 3, 2.0f, {0.0f, -4.0f}, kDust); break;
+    case EventKind::Skid: m_puffs.burst(event.at, 3, 2.0f, {0.0f, -4.0f}, kDust); break;
     case EventKind::Stomp:
         sparks(event.at, 6, gamelib::core::srgb(0xFFF2A0));
         m_squash.kick(0.4f);
@@ -83,7 +71,7 @@ void Effects::onEvent(const game::Event& event, const game::Theme theme)
         if (event.value == 1) {
             m_coins.add({.at = event.at}, 0.55f); // out of a block
         } else {
-            m_rings.add({.at = event.at, .radius = 7.0f, .color = glow(kCoinLight, 1.2f)}, 0.25f);
+            m_rings.add(event.at, 7.0f, glow(kCoinLight, 1.2f), 0.25f);
         }
         break;
     case EventKind::BrickBreak:
@@ -98,15 +86,15 @@ void Effects::onEvent(const game::Event& event, const game::Theme theme)
         break;
     case EventKind::BlockBump:
         if (event.value == 0) {
-            puffs(event.at + Vec2{0.0f, 16.0f}, 2, 3.0f, {0.0f, 6.0f}, kDust);
+            m_puffs.burst(event.at + Vec2{0.0f, 16.0f}, 2, 3.0f, {0.0f, 6.0f}, kDust);
         }
         break;
     case EventKind::ItemSpawn: break;
     case EventKind::PowerUp:
-        m_rings.add({.at = event.at, .radius = 18.0f, .color = glow(kStar, 1.3f)}, 0.4f);
+        m_rings.add(event.at, 18.0f, glow(kStar, 1.3f), 0.4f);
         sparks(event.at, 8, gamelib::core::srgb(0xFFF6C0));
         break;
-    case EventKind::OneUp: m_rings.add({.at = event.at, .radius = 20.0f, .color = glow(kOneUp, 1.3f)}, 0.45f); break;
+    case EventKind::OneUp: m_rings.add(event.at, 20.0f, glow(kOneUp, 1.3f), 0.45f); break;
     case EventKind::Hurt:
         m_flash.trigger(0.6f);
         m_shake.trigger(0.5f);
@@ -118,11 +106,11 @@ void Effects::onEvent(const game::Event& event, const game::Theme theme)
     case EventKind::PipeIn:
     case EventKind::PipeOut: break;
     case EventKind::Checkpoint:
-        m_rings.add({.at = event.at + Vec2{0.0f, -20.0f}, .radius = 26.0f, .color = glow(kHeroCap, 1.2f)}, 0.5f);
+        m_rings.add(event.at + Vec2{0.0f, -20.0f}, 26.0f, glow(kHeroCap, 1.2f), 0.5f);
         sparks(event.at + Vec2{0.0f, -40.0f}, 10, gamelib::core::srgb(0xFFF2A0));
         break;
     case EventKind::StarCoin:
-        m_rings.add({.at = event.at, .radius = 26.0f, .color = glow(kCoin, 1.4f)}, 0.5f);
+        m_rings.add(event.at, 26.0f, glow(kCoin, 1.4f), 0.5f);
         sparks(event.at, 12, gamelib::core::srgb(0xFFF2A0));
         m_flash.trigger(0.25f);
         break;
@@ -137,7 +125,7 @@ void Effects::onEvent(const game::Event& event, const game::Theme theme)
     case EventKind::BossStart: m_shake.trigger(0.4f); break;
     case EventKind::BossHit:
         sparks(event.at, 10, gamelib::core::srgb(0xFFFFFF));
-        m_rings.add({.at = event.at, .radius = 30.0f, .color = glow(gamelib::core::srgb(0xFFFFFF), 1.2f)}, 0.35f);
+        m_rings.add(event.at, 30.0f, glow(gamelib::core::srgb(0xFFFFFF), 1.2f), 0.35f);
         m_shake.trigger(0.6f);
         m_flash.trigger(0.3f);
         break;
@@ -146,27 +134,25 @@ void Effects::onEvent(const game::Event& event, const game::Theme theme)
             m_debris.burst(event.at, 16, {.speed = {60.0f, 200.0f}, .size = {2.0f, 4.0f}, .life = {0.5f, 1.0f},
                                           .spin = {-8.0f, 8.0f}, .color = i == 0 ? glow(kFire, 1.3f) : glow(kStar, 1.2f)});
         }
-        m_rings.add({.at = event.at, .radius = 60.0f, .color = glow(kStar, 1.4f)}, 0.7f);
+        m_rings.add(event.at, 60.0f, glow(kStar, 1.4f), 0.7f);
         m_flash.trigger(1.0f);
         m_shake.trigger(1.0f);
         break;
     case EventKind::BossLand:
-        puffs(event.at, 6, 6.0f, {}, kDust);
+        m_puffs.burst(event.at, 6, 6.0f, {}, kDust);
         m_shake.trigger(0.45f);
         break;
     case EventKind::Points:
-        m_popups.add({.at = event.at + Vec2{0.0f, -6.0f}, .text = _pointsText(event.value),
-                      .color = event.value == 0 ? glow(kOneUp, 1.3f) : kText},
-                     0.8f);
+        m_popups.add(_pointsText(event.value), event.value == 0 ? glow(kOneUp, 1.3f) : kText, 0.8f, event.at + Vec2{0.0f, -6.0f});
         break;
-    case EventKind::PlatformDrop: puffs(event.at + Vec2{0.0f, 4.0f}, 3, 6.0f, {0.0f, 8.0f}, kDust); break;
+    case EventKind::PlatformDrop: m_puffs.burst(event.at + Vec2{0.0f, 4.0f}, 3, 6.0f, {0.0f, 8.0f}, kDust); break;
     }
 }
 
 void Effects::firework(const Vec2 at, const Color color)
 {
     m_debris.burst(at, 24, {.speed = {60.0f, 160.0f}, .size = {1.5f, 3.0f}, .life = {0.6f, 1.1f}, .color = color});
-    m_rings.add({.at = at, .radius = 30.0f, .color = color}, 0.5f);
+    m_rings.add(at, 30.0f, color, 0.5f);
 }
 
 void Effects::update(const float seconds)
@@ -197,17 +183,8 @@ void Effects::clear()
 
 void Effects::drawWorld(gamelib::draw::DrawList& list, const Shapes& shapes) const
 {
-    for (const auto& puff : m_puffs) {
-        const float t = puff.progress();
-        const Vec2 at = puff.value.at + puff.value.drift * puff.age;
-        const float size = puff.value.size * (0.6f + 0.8f * gamelib::core::easeOutCubic(t));
-        list.circle(at, size, puff.value.color.withAlpha(puff.value.color.a * (1.0f - t)));
-    }
-    for (const auto& ring : m_rings) {
-        const float t = ring.progress();
-        const float radius = ring.value.radius * (0.3f + 0.7f * gamelib::core::easeOutCubic(t));
-        list.circle(ring.value.at, radius, ring.value.color.withAlpha(1.0f - t), {.ringWidth = 1.0f + 1.6f * (1.0f - t)});
-    }
+    m_puffs.draw(list);
+    m_rings.draw(list);
     for (const auto& spark : m_sparks) {
         const float t = spark.progress();
         const Vec2 dir{std::cos(spark.value.angle), std::sin(spark.value.angle)};
@@ -227,13 +204,7 @@ void Effects::drawWorld(gamelib::draw::DrawList& list, const Shapes& shapes) con
 
 void Effects::drawPopups(gamelib::draw::DrawList& list, const gamelib::core::View2D& view) const
 {
-    for (const auto& popup : m_popups) {
-        const float t = popup.progress();
-        const Vec2 at = view.toCanvas(popup.value.at) + Vec2{0.0f, -60.0f * gamelib::core::easeOutCubic(t)};
-        const float alpha = 1.0f - gamelib::core::smoothstep(0.6f, 1.0f, t);
-        list.text(popup.value.text, at.x, at.y, {.pixelSize = 4.0f, .color = popup.value.color.withAlpha(alpha),
-                                                 .align = gamelib::draw::Align::Center, .shadow = true});
-    }
+    m_popups.drawWorld(list, view, {.pixelSize = 4.0f, .align = gamelib::draw::Align::Center, .shadow = true}, 60.0f);
 }
 
 void Effects::drawFlash(gamelib::draw::DrawList& list, const gamelib::core::Size canvas) const

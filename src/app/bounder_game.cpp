@@ -5,13 +5,11 @@
 #include <gamelib/app/settings.hpp>
 #include <gamelib/core/easing.hpp>
 #include <gamelib/draw/vector_text.hpp>
-#include <gamelib/storage/files.hpp>
 #include <gamelib/ui/menu.hpp>
 
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <cstdlib>
 #include <utility>
 
 namespace bounder::app {
@@ -32,6 +30,7 @@ constexpr float kMapCellsPerSecond = 5.0f;
 constexpr float kClearSeconds = 2.6f;
 constexpr float kEndingMenuDelay = 9.0f;
 constexpr int kDemoLevels = 4; // world 1's four levels
+constexpr int kExitToMap = 0; // the pause menu's EXIT TO MAP
 
 gamelib::ui::MenuStyle _menuStyle()
 {
@@ -46,17 +45,6 @@ gamelib::ui::MenuStyle _menuStyle()
             .titlePixel = 13.0f,
             .itemPixel = 6.0f,
             .glowWidth = 22.0f};
-}
-
-int _envLevel()
-{
-    if (const char* text = std::getenv("BOUNDER_START_LEVEL")) {
-        const int level = std::atoi(text);
-        if (level >= 0 && level < game::kLevelCount) {
-            return level;
-        }
-    }
-    return -1;
 }
 
 game::Session _demoSession(const int level)
@@ -91,13 +79,15 @@ std::string _cardTitle(const int level)
 
 BounderGame::BounderGame(gamelib::app::App& app, ProfileFile profile, const bool demo)
     : m_profile{std::move(profile)}
-    , m_menus{"BOUNDER", m_profile.value().settings, {}, {.music = true, .vsync = true}}
+    , m_menus{"BOUNDER", m_profile.value().settings, {}, {.music = true, .vsync = true},
+              [](gamelib::ui::Menu& paused) { paused.action("EXIT TO MAP", kExitToMap); }}
     , m_sfx{app.audio(), renderSfx}
-    , m_music{app.audio()}
+    , m_music{app.audio(), 2, tuneTake}
     , m_shapes{Shapes::registerWith(app.renderer())}
     , m_canvas{app.canvas()}
     , m_view{app.canvas()}
-    , m_startLevel{_envLevel()}
+    , m_dev{gamelib::app::readDevStart("BOUNDER")}
+    , m_startLevel{m_dev.level && *m_dev.level < game::kLevelCount ? *m_dev.level : -1}
     , m_attract{[](std::uint64_t) { return DemoRun{.session = _demoSession(0), .bot = {}}; },
                 [](DemoRun& run, float) {
                     run.session.tick(run.bot.next(run.session));
@@ -134,7 +124,7 @@ BounderGame::BounderGame(gamelib::app::App& app, ProfileFile profile, const bool
                  static_cast<float>(map.nodes[static_cast<std::size_t>(m_node)].cell.y)};
     m_profile.save(); // a missing file is written with the defaults, so it can be found and edited
     gamelib::app::applySettings(app, m_profile.value().settings);
-    m_music.play(app.audio(), Tune::Title);
+    m_music.play(app.audio(), Tune::Title, 0.6f);
 }
 
 void BounderGame::save()
@@ -155,7 +145,7 @@ game::Carry BounderGame::freshCarry() const
 
 void BounderGame::onFocus(gamelib::app::App& app, const bool focused)
 {
-    if (!m_demoMode && app.config().pauseOnFocusLoss) {
+    if (!m_demoMode) {
         m_menus.onFocus(app, focused, m_time);
     }
 }
@@ -173,9 +163,9 @@ void BounderGame::onKey(gamelib::app::App& app, const gamelib::platform::KeyEven
         }
         return;
     }
-    const ArcadeScreen before = m_menus.current();
-    handleResult(app, m_menus.onKey(app, event, m_time), before);
-    if (!event.pressed || before != ArcadeScreen::Playing || !m_menus.is(ArcadeScreen::Playing) || m_mode != Mode::Map) {
+    const gamelib::app::ArcadeResult result = m_menus.onKey(app, event, m_time);
+    handleResult(app, result);
+    if (!event.pressed || result.from != ArcadeScreen::Playing || !m_menus.is(ArcadeScreen::Playing) || m_mode != Mode::Map) {
         return;
     }
     switch (event.key) {
@@ -205,9 +195,9 @@ void BounderGame::onGamepad(gamelib::app::App& app, const gamelib::platform::Gam
         }
         return;
     }
-    const ArcadeScreen before = m_menus.current();
-    handleResult(app, m_menus.onGamepad(app, event, m_time), before);
-    if (!event.pressed || before != ArcadeScreen::Playing || !m_menus.is(ArcadeScreen::Playing) || m_mode != Mode::Map) {
+    const gamelib::app::ArcadeResult result = m_menus.onGamepad(app, event, m_time);
+    handleResult(app, result);
+    if (!event.pressed || result.from != ArcadeScreen::Playing || !m_menus.is(ArcadeScreen::Playing) || m_mode != Mode::Map) {
         return;
     }
     switch (event.button) {
@@ -224,26 +214,26 @@ void BounderGame::onGamepad(gamelib::app::App& app, const gamelib::platform::Gam
     }
 }
 
-void BounderGame::handleResult(gamelib::app::App& app, const gamelib::app::ArcadeResult& result, const ArcadeScreen before)
+void BounderGame::handleResult(gamelib::app::App& app, const gamelib::app::ArcadeResult& result)
 {
     if (result.changed) {
         m_profile.save();
     }
     switch (result.action) {
     case ArcadeAction::Start:
-        if (before == ArcadeScreen::Paused) {
+        if (result.from == ArcadeScreen::Paused) {
             // RESTART: the level from its start, as it was entered.
             if (m_mode == Mode::Level && m_session) {
                 startLevel(app, m_level, game::Carry{.run = m_levelStartRun}, false);
             }
             break;
         }
-        if (before == ArcadeScreen::GameOver) {
+        if (result.from == ArcadeScreen::GameOver) {
             // PLAY AGAIN after a game over or the ending: a fresh run, progress kept.
             m_profile.value().game.run = {};
         }
         enterMap(app);
-        if (m_startLevel >= 0 && before == ArcadeScreen::Title) {
+        if (m_startLevel >= 0 && result.from == ArcadeScreen::Title) {
             startLevel(app, m_startLevel, freshCarry(), true);
         }
         break;
@@ -257,7 +247,7 @@ void BounderGame::handleResult(gamelib::app::App& app, const gamelib::app::Arcad
         m_mode = Mode::Map;
         m_gameOver = false;
         save();
-        m_music.play(app.audio(), Tune::Title);
+        m_music.play(app.audio(), Tune::Title, 0.6f);
         break;
     case ArcadeAction::Quit:
         if (m_mode == Mode::Level && m_session && !m_gameOver) {
@@ -265,6 +255,15 @@ void BounderGame::handleResult(gamelib::app::App& app, const gamelib::app::Arcad
         }
         save();
         app.requestQuit();
+        break;
+    case ArcadeAction::Game:
+        // EXIT TO MAP: back to the level's node; leaving costs nothing.
+        if (result.command == kExitToMap && m_mode == Mode::Level && m_session && !m_gameOver && m_clearTimer < 0.0f
+            && !m_transition.active()) {
+            m_profile.value().game.run = m_levelStartRun;
+            m_music.stop(app.audio(), 0.3f);
+            leaveLevel(app);
+        }
         break;
     case ArcadeAction::Resume:
     case ArcadeAction::Controls:
@@ -295,7 +294,7 @@ void BounderGame::enterMap(gamelib::app::App& app)
     const gamelib::core::Cell cell = map.nodes[static_cast<std::size_t>(m_node)].cell;
     m_mapHero = {static_cast<float>(cell.x), static_cast<float>(cell.y)};
     save();
-    m_music.play(app.audio(), Tune::Map);
+    m_music.play(app.audio(), Tune::Map, 0.6f);
 }
 
 void BounderGame::mapCommand(gamelib::app::App& app, const MapCommand command)
@@ -322,7 +321,7 @@ void BounderGame::mapCommand(gamelib::app::App& app, const MapCommand command)
                                    Progress& p = m_profile.value().game;
                                    p.world += next ? 1 : -1;
                                    const game::WorldMap& to = game::worldMap(p.world);
-                                   m_node = 0;
+                                   m_node = to.start;
                                    if (!next) {
                                        for (std::size_t i = 0; i < to.nodes.size(); ++i) {
                                            if (to.nodes[i].kind == game::NodeKind::NextWorld) {
@@ -394,16 +393,9 @@ void BounderGame::startLevel(gamelib::app::App& app, const int level, const game
     m_transition.start(style, [this, &app, level, carry] {
         m_mode = Mode::Level;
         m_session.emplace(level, carry);
-        m_replay = {};
-        if (const char* path = std::getenv("BOUNDER_REPLAY"); path != nullptr && level == m_startLevel) {
-            if (const std::optional<std::string> text = gamelib::storage::readFile(path)) {
-                if (auto recording = gamelib::core::InputRecording<game::Input>::parse(*text, game::decodeInput)) {
-                    m_replay = gamelib::core::Playback<game::Input>{std::make_shared<const gamelib::core::InputRecording<game::Input>>(std::move(*recording))};
-                }
-            }
-        }
-        if (const char* column = std::getenv("BOUNDER_START_COLUMN"); column != nullptr && m_startLevel == level) {
-            m_session->debugStartAt(std::atoi(column));
+        m_replay = level == m_startLevel ? m_dev.playback<game::Input>(game::decodeInput) : gamelib::core::Playback<game::Input>{};
+        if (m_dev.column && level == m_startLevel) {
+            m_session->debugStartAt(*m_dev.column);
         }
         m_foundBefore = static_cast<std::uint8_t>(m_profile.value().game.campaign.record(levelId(level)).found);
         m_view.snap(*m_session);
@@ -411,7 +403,7 @@ void BounderGame::startLevel(gamelib::app::App& app, const int level, const game
         m_clearTimer = -1.0f;
         m_gameOver = false;
         m_starMusic = false;
-        m_music.stop(app.audio());
+        m_music.stop(app.audio(), 0.3f);
     });
 }
 
@@ -522,7 +514,7 @@ void BounderGame::react(gamelib::app::App& app, const game::Event& event)
     case EventKind::PowerUp:
         m_sfx.queue(sounds, Sfx::PowerUp);
         if (event.item == game::ItemKind::Star) {
-            m_banners.add({.title = "STAR POWER!", .line = "", .color = kStar}, 1.2f);
+            m_banners.add("STAR POWER!", "", kStar, 1.2f);
         }
         break;
     case EventKind::OneUp: m_sfx.queue(sounds, Sfx::OneUp); break;
@@ -535,11 +527,11 @@ void BounderGame::react(gamelib::app::App& app, const game::Event& event)
     case EventKind::StarCoin: m_sfx.queue(sounds, Sfx::StarCoin); break;
     case EventKind::GoalTouch:
         m_sfx.queue(sounds, Sfx::Pole);
-        m_music.stop(app.audio());
+        m_music.stop(app.audio(), 0.3f);
         break;
     case EventKind::Clear: {
         m_sfx.queue(sounds, Sfx::Clear);
-        m_music.stop(app.audio());
+        m_music.stop(app.audio(), 0.3f);
         // Record the clear: the best score and the star coins found.
         Progress& progress = m_profile.value().game;
         const gamelib::core::ClearResult result = progress.campaign.clear(
@@ -554,26 +546,22 @@ void BounderGame::react(gamelib::app::App& app, const game::Event& event)
         if (!result.unlocked.empty() && m_level != game::kCastleLevel) {
             line += "   A NEW PATH OPENS";
         }
-        m_banners.add({.title = m_level == game::kCastleLevel ? "THE KING IS BEATEN!" : "COURSE CLEAR!", .line = line,
-                       .color = srgb(0xFFE14D)},
-                      kClearSeconds);
+        m_banners.add(m_level == game::kCastleLevel ? "THE KING IS BEATEN!" : "COURSE CLEAR!", line, srgb(0xFFE14D), kClearSeconds);
         m_clearTimer = kClearSeconds;
         save();
         break;
     }
     case EventKind::Death:
         m_sfx.queue(sounds, Sfx::Death);
-        m_music.stop(app.audio());
+        m_music.stop(app.audio(), 0.3f);
         app.hitStop(0.12f);
         break;
     case EventKind::HurryUp:
         m_sfx.queue(sounds, Sfx::HurryUp);
-        m_banners.add({.title = "HURRY UP!", .line = "", .color = srgb(0xFF6A3D)}, 1.6f);
+        m_banners.add("HURRY UP!", "", srgb(0xFF6A3D), 1.6f);
         break;
     case EventKind::BossStart:
-        m_banners.add({.title = event.enemy == game::EnemyKind::King ? "THE KING" : "THE BRUTE", .line = "STOMP HIM!",
-                       .color = srgb(0xFF6A3D)},
-                      1.8f);
+        m_banners.add(event.enemy == game::EnemyKind::King ? "THE KING" : "THE BRUTE", "STOMP HIM!", srgb(0xFF6A3D), 1.8f);
         break;
     case EventKind::BossHit:
         m_sfx.queue(sounds, Sfx::BossHit);
@@ -581,7 +569,7 @@ void BounderGame::react(gamelib::app::App& app, const game::Event& event)
         break;
     case EventKind::BossDefeated:
         m_sfx.queue(sounds, Sfx::BossDefeated);
-        m_music.stop(app.audio());
+        m_music.stop(app.audio(), 0.3f);
         app.hitStop(0.25f);
         break;
     case EventKind::BossLand: m_sfx.queue(sounds, Sfx::BossLand); break;
@@ -635,7 +623,7 @@ void BounderGame::frame(gamelib::app::App& app, const gamelib::app::FrameInfo& i
                 m_endingScore = progress.run.score;
                 m_newBest = m_profile.value().bests.offer(gamelib::app::kScore, m_endingScore);
                 save();
-                m_music.play(app.audio(), Tune::Ending, false, 1.0f);
+                m_music.play(app.audio(), Tune::Ending, 1.0f);
                 m_menus.setGameOverTitle("THE END");
                 m_menus.gameOverAfter(kEndingMenuDelay, m_time);
             } else {
@@ -671,11 +659,11 @@ void BounderGame::frame(gamelib::app::App& app, const gamelib::app::FrameInfo& i
 void BounderGame::updateMusic(gamelib::app::App& app)
 {
     if (m_menus.is(ArcadeScreen::Title) || m_demoMode) {
-        m_music.play(app.audio(), Tune::Title);
+        m_music.play(app.audio(), Tune::Title, 0.6f);
         return;
     }
     if (m_mode == Mode::Map && !m_transition.active()) {
-        m_music.play(app.audio(), Tune::Map);
+        m_music.play(app.audio(), Tune::Map, 0.6f);
         return;
     }
     if (m_mode != Mode::Level || !m_session || m_transition.active()) {
@@ -687,14 +675,14 @@ void BounderGame::updateMusic(gamelib::app::App& app)
         return; // dying, the goal, the boss down: the jingles play alone
     }
     if (m_session->hero().starTicks > 60) {
-        m_music.play(app.audio(), Tune::Star, false, 0.2f);
+        m_music.play(app.audio(), Tune::Star, 0.2f);
         return;
     }
     if (m_session->lockedArena()) {
-        m_music.play(app.audio(), Tune::Boss, false, 0.4f);
+        m_music.play(app.audio(), Tune::Boss, 0.4f);
         return;
     }
-    m_music.play(app.audio(), _tuneFor(m_session->area().theme), m_session->time() <= game::kHurryUpTime, 0.4f);
+    m_music.play(app.audio(), _tuneFor(m_session->area().theme), 0.4f, m_session->time() <= game::kHurryUpTime ? kHurryTake : 0);
 }
 
 bool BounderGame::showsLevel() const
@@ -806,42 +794,28 @@ void BounderGame::drawHud(gamelib::draw::DrawList& list, const gamelib::core::Si
 
 void BounderGame::drawCard(gamelib::draw::DrawList& list, const gamelib::core::Size canvas) const
 {
-    if (!m_card || m_transition.phase() != gamelib::ui::Transition::Phase::Covered) {
+    // Fades in at the end of the cover and out at the start of the uncover
+    // (coverage stays 1 through the hold), so it never sits over the level.
+    const float a = gamelib::core::smoothstep(0.97f, 1.0f, m_transition.coverage());
+    if (!m_card || a <= 0.0f) {
         return;
     }
     const float cx = static_cast<float>(canvas.width) / 2.0f;
     const float cy = static_cast<float>(canvas.height) / 2.0f;
     gamelib::draw::drawVectorText(list, m_card->title, cx, cy - 140.0f,
-                                  {.size = 64.0f, .color = kText, .weight = 1.3f, .align = gamelib::draw::Align::Center});
-    list.add({.rect = {cx - 130.0f, cy - 30.0f, 72.0f, 73.5f}, .color = kHeroCap, .color2 = kHeroOveralls,
+                                  {.size = 64.0f, .color = kText.withAlpha(a), .weight = 1.3f, .align = gamelib::draw::Align::Center});
+    list.add({.rect = {cx - 130.0f, cy - 30.0f, 72.0f, 73.5f}, .color = kHeroCap.withAlpha(a), .color2 = kHeroOveralls.withAlpha(a),
               .shape = m_shapes.hero, .params = {1.0f, 0.0f, 0.0f, 4.0f}, .scale = 3.0f});
-    list.text("x " + std::to_string(m_card->lives), cx - 40.0f, cy - 6.0f, {.pixelSize = 7.0f, .color = kText});
+    list.text("x " + std::to_string(m_card->lives), cx - 40.0f, cy - 6.0f, {.pixelSize = 7.0f, .color = kText.withAlpha(a)});
     if (!m_card->line.empty()) {
-        list.text(m_card->line, cx, cy + 110.0f, {.pixelSize = 4.0f, .color = kTextDim, .align = gamelib::draw::Align::Center});
+        list.text(m_card->line, cx, cy + 110.0f, {.pixelSize = 4.0f, .color = kTextDim.withAlpha(a), .align = gamelib::draw::Align::Center});
     }
 }
 
 void BounderGame::drawBanners(gamelib::draw::DrawList& list, const gamelib::core::Size canvas) const
 {
-    float y = static_cast<float>(canvas.height) * 0.3f;
-    for (const auto& banner : m_banners) {
-        const float t = banner.progress();
-        const float in = gamelib::core::easeOutBack(std::min(1.0f, banner.age / 0.35f));
-        const float alpha = 1.0f - gamelib::core::smoothstep(0.8f, 1.0f, t);
-        const float cx = static_cast<float>(canvas.width) / 2.0f;
-        const float size = 90.0f * in;
-        gamelib::draw::drawVectorText(list, banner.value.title, cx + 5.0f, y + 6.0f,
-                                      {.size = size, .color = kInk.withAlpha(0.6f * alpha), .weight = 1.8f,
-                                       .align = gamelib::draw::Align::Center});
-        gamelib::draw::drawVectorText(list, banner.value.title, cx, y,
-                                      {.size = size, .color = banner.value.color.withAlpha(alpha), .weight = 1.8f,
-                                       .align = gamelib::draw::Align::Center});
-        if (!banner.value.line.empty()) {
-            list.text(banner.value.line, cx, y + 110.0f,
-                      {.pixelSize = 5.0f, .color = kText.withAlpha(alpha), .align = gamelib::draw::Align::Center, .shadow = true});
-        }
-        y += 200.0f;
-    }
+    m_banners.draw(list, static_cast<float>(canvas.width) / 2.0f,
+                   {.top = static_cast<float>(canvas.height) * 0.3f, .lineColor = kText, .shadow = kInk.withAlpha(0.6f)});
 }
 
 void BounderGame::drawEnding(gamelib::draw::DrawList& list, const gamelib::core::Size canvas) const
@@ -896,7 +870,7 @@ void BounderGame::drawMenus(gamelib::draw::DrawList& list, const gamelib::core::
         }
     } else if (m_menus.is(ArcadeScreen::Paused) && m_session && m_mode == Mode::Level) {
         subtitle = std::string{m_session->def().id} + "  " + std::string{m_session->def().name};
-        footer = "RESTART PLAYS THE LEVEL AGAIN   MAIN MENU LEAVES IT";
+        footer = "RESTART PLAYS THE LEVEL AGAIN   EXIT TO MAP LEAVES IT";
     }
     gamelib::ui::drawMenu(list, *menu, canvas, _menuStyle(), subtitle, footer);
 }

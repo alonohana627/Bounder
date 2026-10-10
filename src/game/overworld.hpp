@@ -3,8 +3,9 @@
 // The overworld: one map per world, the level select. A map is a grid of
 // text: nodes (the start, levels 1-4, the fortress, the castle, and gates to
 // the next and previous worlds) joined by paths. A path opens once the node
-// it leaves from is cleared (the hero can always walk back), computed with
-// GameLib's floodFill from the start node: uncleared nodes stop the fill.
+// it leaves from is cleared (the hero can always walk back): GameLib's
+// NodeMap reads the text and walks the paths; which node is which level
+// stays here.
 //
 //   S  start      1 2 3 4  levels      F  fortress      C  final castle
 //   >  gate to the next world (open once the fortress is cleared)
@@ -14,6 +15,7 @@
 #include "levels.hpp"
 
 #include <gamelib/core/grid.hpp>
+#include <gamelib/core/node_map.hpp>
 #include <gamelib/core/math.hpp>
 
 #include <functional>
@@ -32,8 +34,9 @@ struct MapNode {
 
 struct WorldMap {
     int world = 0;
-    gamelib::core::Grid<char> tiles{1, 1};
-    std::vector<MapNode> nodes; // the start node first
+    gamelib::core::NodeMap paths; // the text: nodes, paths and scenery
+    std::vector<MapNode> nodes;  // paths.nodes()[i] is nodes[i]
+    int start = 0;               // the node a world is entered at (S or <)
 };
 
 [[nodiscard]] const WorldMap& worldMap(int world);
