@@ -772,7 +772,8 @@ void Session::checkCheckpointAndGoal()
     const Rect& box = m_hero.body.box;
     if (area.checkpoint.x >= 0 && !m_checkpointReached && m_area == 0) {
         const Rect flag = gamelib::core::cellRect(area.checkpoint, kTile);
-        const Rect reach{flag.x + 3.0f, flag.y - 2.0f * kTile, flag.width - 6.0f, 3.0f * kTile};
+        // The whole column above the flag counts: jumping over it still saves the place.
+        const Rect reach{flag.x + 3.0f, -kTile, flag.width - 6.0f, flag.bottom() + kTile};
         if (gamelib::core::overlaps(reach, box)) {
             m_checkpointReached = true;
             m_events.push({.kind = EventKind::Checkpoint, .at = area.map.cellBottom(area.checkpoint)});

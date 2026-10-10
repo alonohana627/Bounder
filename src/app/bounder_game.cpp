@@ -815,7 +815,7 @@ void BounderGame::drawCard(gamelib::draw::DrawList& list, const gamelib::core::S
                                   {.size = 64.0f, .color = kText, .weight = 1.3f, .align = gamelib::draw::Align::Center});
     list.add({.rect = {cx - 130.0f, cy - 30.0f, 72.0f, 73.5f}, .color = kHeroCap, .color2 = kHeroOveralls,
               .shape = m_shapes.hero, .params = {1.0f, 0.0f, 0.0f, 4.0f}, .scale = 3.0f});
-    list.text("x  " + std::to_string(m_card->lives), cx - 30.0f, cy - 6.0f, {.pixelSize = 7.0f, .color = kText});
+    list.text("x " + std::to_string(m_card->lives), cx - 40.0f, cy - 6.0f, {.pixelSize = 7.0f, .color = kText});
     if (!m_card->line.empty()) {
         list.text(m_card->line, cx, cy + 110.0f, {.pixelSize = 4.0f, .color = kTextDim, .align = gamelib::draw::Align::Center});
     }
