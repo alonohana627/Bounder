@@ -886,7 +886,7 @@ void BounderGame::drawMenus(gamelib::draw::DrawList& list, const gamelib::core::
     std::string footer;
     if (m_menus.is(ArcadeScreen::Title)) {
         subtitle = "LEVELS " + std::to_string(progress.campaign.clearedCount()) + "/" + std::to_string(game::kLevelCount)
-                   + "   STAR COINS " + std::to_string(starCoinsFound(progress.campaign)) + "/" + std::to_string(kStarCoinsTotal);
+                   + "  STARS " + std::to_string(starCoinsFound(progress.campaign)) + "/" + std::to_string(kStarCoinsTotal);
         footer = "ARROWS MOVE   Z JUMP   X RUN AND FIRE   DOWN PIPES   ESC PAUSE";
     } else if (m_menus.is(ArcadeScreen::GameOver)) {
         const std::optional<std::int64_t> best = m_profile.value().bests.get(gamelib::app::kScore);
