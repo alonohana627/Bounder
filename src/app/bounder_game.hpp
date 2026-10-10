@@ -18,6 +18,7 @@
 #include <gamelib/ai/attract.hpp>
 #include <gamelib/app/app.hpp>
 #include <gamelib/app/arcade_menus.hpp>
+#include <gamelib/core/replay.hpp>
 #include <gamelib/audio/sound_bank.hpp>
 #include <gamelib/fx/debug_overlay.hpp>
 #include <gamelib/fx/transients.hpp>
@@ -119,6 +120,10 @@ private:
     bool m_gameOver = false;
     bool m_starMusic = false;
     int m_startLevel = -1;        // BOUNDER_START_LEVEL: PLAY goes straight into a level
+    // BOUNDER_REPLAY: a recording (core::InputRecording text) that drives the
+    // level started with BOUNDER_START_LEVEL instead of the keys, to watch a
+    // proven route (and the ending) without playing it.
+    gamelib::core::Playback<game::Input> m_replay;
 
     // The demo behind the title.
     gamelib::ai::AttractMode<DemoRun> m_attract;

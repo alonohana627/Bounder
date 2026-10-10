@@ -5,6 +5,7 @@
 #include <gamelib/app/settings.hpp>
 #include <gamelib/core/easing.hpp>
 #include <gamelib/draw/vector_text.hpp>
+#include <gamelib/storage/files.hpp>
 #include <gamelib/ui/menu.hpp>
 
 #include <algorithm>
@@ -393,6 +394,14 @@ void BounderGame::startLevel(gamelib::app::App& app, const int level, const game
     m_transition.start(style, [this, &app, level, carry] {
         m_mode = Mode::Level;
         m_session.emplace(level, carry);
+        m_replay = {};
+        if (const char* path = std::getenv("BOUNDER_REPLAY"); path != nullptr && level == m_startLevel) {
+            if (const std::optional<std::string> text = gamelib::storage::readFile(path)) {
+                if (auto recording = gamelib::core::InputRecording<game::Input>::parse(*text, game::decodeInput)) {
+                    m_replay = gamelib::core::Playback<game::Input>{std::make_shared<const gamelib::core::InputRecording<game::Input>>(std::move(*recording))};
+                }
+            }
+        }
         if (const char* column = std::getenv("BOUNDER_START_COLUMN"); column != nullptr && m_startLevel == level) {
             m_session->debugStartAt(std::atoi(column));
         }
@@ -463,7 +472,8 @@ void BounderGame::levelTick(gamelib::app::App& app)
     if (!m_session || m_transition.active()) {
         return;
     }
-    m_session->tick(readInput(app.input()));
+    const std::optional<game::Input> replayed = m_replay.next();
+    m_session->tick(replayed ? *replayed : readInput(app.input()));
     for (const game::Event& event : m_session->events().take()) {
         react(app, event);
     }
@@ -854,6 +864,9 @@ void BounderGame::drawEnding(gamelib::draw::DrawList& list, const gamelib::core:
         "STAR COINS   " + std::to_string(starCoinsFound(progress.campaign)) + " / " + std::to_string(kStarCoinsTotal),
         m_newBest ? std::string{"NEW BEST SCORE!"} : "BEST SCORE   " + std::to_string(m_profile.value().bests.get(gamelib::app::kScore).value_or(0)),
     };
+    const float thanks = gamelib::core::smoothstep(4.5f, 5.5f, m_endingTime);
+    gamelib::draw::drawVectorText(list, "Thanks for playing Bounder!", cx, 880.0f,
+                                  {.size = 48.0f, .color = kText.withAlpha(thanks), .weight = 1.2f, .align = gamelib::draw::Align::Center});
     for (std::size_t i = 0; i < lines.size(); ++i) {
         const float fade = gamelib::core::smoothstep(1.5f + 0.4f * static_cast<float>(i), 2.3f + 0.4f * static_cast<float>(i), m_endingTime);
         list.text(lines[i], cx, 540.0f + 66.0f * static_cast<float>(i),

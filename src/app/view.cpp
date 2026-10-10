@@ -403,6 +403,13 @@ void LevelView::drawHero(gamelib::draw::DrawList& list, const Shapes& shapes, co
         return; // the flicker after a hit
     }
     const Rect box = _lerp(hero.previous, hero.body.box, alpha);
+    if (phase == game::Phase::Goal || (phase == game::Phase::Over && session.outcome() == game::Outcome::Cleared)) {
+        const game::Area& area = session.area();
+        const bool indoors = area.theme == game::Theme::Fortress || area.theme == game::Theme::Castle;
+        if (area.goal.x >= 0 && !indoors && box.center().x >= area.map.cellBottom(area.goal).x + 6.0f * kTile - 4.0f) {
+            return; // in through the castle's door
+        }
+    }
     bool big = hero.power != game::Power::Small;
     if (phase == game::Phase::Growing && (session.phaseTicks() / 4) % 2 == 0) {
         big = hero.growFrom != game::Power::Small; // flickers between the old and the new size

@@ -58,7 +58,7 @@ vec3 groundFill(vec2 wp, int theme)
     float n = valueNoise(wp * 0.35);
     float speck = step(0.82, hashf(floor(wp / 3.0)));
     vec3 c = base * (0.92 + 0.12 * n);
-    c = mix(c, base * 0.72, speck * 0.6);
+    c = mix(c, base * 0.8, speck * 0.35);
     // Pebbles in dirt and sand.
     vec2 cellP = mod(wp, 8.0) - 4.0;
     float pebble = 1.0 - smoothstep(0.9, 1.4, length(cellP - vec2(hashf(floor(wp / 8.0)) * 3.0 - 1.5, 0.0)));
@@ -220,11 +220,22 @@ vec4 pipe(vec2 p, int kind)
     return acc;
 }
 
-vec4 platform(vec2 p)
+vec4 platform(vec2 p, int theme)
 {
-    // A plank across the top half; open ends are rounded.
     float l = isOpen(W) ? -8.0 : -40.0;
     float r = isOpen(E) ? 8.0 : 40.0;
+    if (theme == 3) {
+        // In the sky: a puffy cloud, flat on top so it reads as a floor.
+        vec2 wp = cellOrigin() + p;
+        float bumps = 1.6 * sin(wp.x * 0.55) + 1.0 * sin(wp.x * 1.3 + 0.7);
+        float d = sdRoundBox(p - vec2((l + r) * 0.5, -3.5), vec2((r - l) * 0.5, 4.0 + max(bumps, 0.0) * 0.4), 4.0);
+        vec4 acc = vec4(0.0);
+        acc = put(acc, mix(kInk, sprite.color2.rgb, 0.55), coverage(d));
+        acc = put(acc, sprite.color2.rgb * (0.95 + 0.05 * valueNoise(wp * 0.3)), coverage(d + 1.0));
+        acc = put(acc, sprite.color2.rgb * 0.88, coverage(d + 1.0) * smoothstep(-1.0, 3.0, p.y));
+        return acc;
+    }
+    // A plank across the top half; open ends are rounded.
     vec2 c = vec2((l + r) * 0.5, -4.5);
     float d = sdRoundBox(p - c, vec2((r - l) * 0.5, 3.5), 2.5);
     vec4 acc = vec4(0.0);
@@ -333,7 +344,7 @@ void main()
     } else if (kind == 5 || kind == 6) {
         c = pipe(p, kind);
     } else if (kind == 7) {
-        c = platform(p);
+        c = platform(p, theme);
     } else if (kind >= 8 && kind <= 13) {
         c = slope(p, kind, theme);
     } else if (kind == 14) {

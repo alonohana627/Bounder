@@ -347,8 +347,11 @@ void Session::tick(const Input& input)
     }
     case Phase::Dying: dyingTick(); break;
     case Phase::Goal: goalTick(input); break;
-    case Phase::BossDown:
+    case Phase::BossDown: {
         stepEnemies(); // the beaten boss falls away
+        // The hero lands and comes to rest.
+        const gamelib::core::PlatformerTuning t = tuningFor(false, m_hero.body.velocity.x, false, false);
+        (void)gamelib::core::stepPlatformer(m_hero.body, {}, t, tileWorld());
         if (m_phaseTicks >= kBossDownTicks) {
             addPoints(m_time * kTimeBonusPerUnit, m_hero.body.box.center() + Vec2{0.0f, -20.0f});
             m_time = 0;
@@ -358,6 +361,7 @@ void Session::tick(const Input& input)
             m_phaseTicks = 0;
         }
         break;
+    }
     case Phase::Over: break;
     }
 }
