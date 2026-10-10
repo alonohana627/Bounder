@@ -36,7 +36,7 @@ constexpr int kDemoLevels = 4; // world 1's four levels
 gamelib::ui::MenuStyle _menuStyle()
 {
     return {.veil = Color{0.02f, 0.02f, 0.06f, 0.45f},
-            .panel = srgb(0x1A1430, 0.94f),
+            .panel = srgb(0x1A1430, 0.98f),
             .border = srgb(0xFFC93C),
             .title = srgb(0xFFC93C),
             .text = kText,
@@ -155,7 +155,7 @@ game::Carry BounderGame::freshCarry() const
 
 void BounderGame::onFocus(gamelib::app::App& app, const bool focused)
 {
-    if (!m_demoMode) {
+    if (!m_demoMode && app.config().pauseOnFocusLoss) {
         m_menus.onFocus(app, focused, m_time);
     }
 }

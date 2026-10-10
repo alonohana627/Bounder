@@ -4,6 +4,7 @@
 
 #include "bushes_frag.spv.hpp"
 #include "enemy_frag.spv.hpp"
+#include "far_frag.spv.hpp"
 #include "hero_frag.spv.hpp"
 #include "item_frag.spv.hpp"
 #include "map_frag.spv.hpp"
@@ -141,7 +142,8 @@ Shapes Shapes::registerWith(gamelib::gfx::Renderer& renderer)
             .scenery = renderer.addShape(shaders::scenery_frag),
             .sky = renderer.addShape(shaders::sky_frag),
             .bushes = renderer.addShape(shaders::bushes_frag),
-            .map = renderer.addShape(shaders::map_frag)};
+            .map = renderer.addShape(shaders::map_frag),
+            .far = renderer.addShape(shaders::far_frag)};
 }
 
 LevelView::LevelView(const gamelib::core::Size canvas)
@@ -231,11 +233,13 @@ void LevelView::drawBackdrop(gamelib::draw::DrawList& list, const Shapes& shapes
                       .color = pal[Role::SkyTop], .color2 = pal[Role::SkyLow], .params = {t, 0.0f}});
     if (!indoors) {
         // Hills: the ridge base sits at params.z of the quad, scrolled by the offset.
-        if (theme != game::Theme::Sky) {
-            layers.push_back({.shape = gamelib::draw::shapes::Hills, .factor = {0.12f, 0.0f}, .offset = {0.0f, rest(0.1f, 60.0f)},
-                              .color = lerp(pal[Role::Hills], pal[Role::SkyLow], 0.45f), .color2 = lerp(pal[Role::HillsRidge], pal[Role::SkyLow], 0.35f),
-                              .params = {0.6f, 160.0f}, .bits = 11 + static_cast<std::uint64_t>(theme)});
-        }
+        // The far silhouette by theme (hills, mesas, snowy peaks, cloud banks),
+        // blended towards the sky for distance.
+        const bool sky = theme == game::Theme::Sky;
+        layers.push_back({.shape = shapes.far, .factor = {0.1f, 0.0f}, .offset = {0.0f, rest(0.1f, 60.0f)},
+                          .color = lerp(sky ? pal[Role::Cloud] : pal[Role::Hills], pal[Role::SkyLow], sky ? 0.35f : 0.45f),
+                          .color2 = lerp(pal[Role::HillsRidge], pal[Role::SkyLow], theme == game::Theme::Ice ? 0.1f : 0.3f),
+                          .params = {t, 0.75f}});
         layers.push_back({.shape = gamelib::draw::shapes::Clouds, .factor = {0.06f, 0.0f}, .offset = {0.0f, -climb * 0.05f},
                           .color = pal[Role::Cloud].withAlpha(theme == game::Theme::Sky ? 0.95f : 0.9f),
                           .color2 = pal[Role::CloudShade], .params = {theme == game::Theme::Sky ? 0.55f : 0.35f, 260.0f},

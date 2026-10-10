@@ -17,6 +17,7 @@ gamelib_target_warnings(bounder_app)
 gamelib_add_shaders(bounder_app SHADERS
     ${PROJECT_SOURCE_DIR}/shaders/bushes.frag
     ${PROJECT_SOURCE_DIR}/shaders/enemy.frag
+    ${PROJECT_SOURCE_DIR}/shaders/far.frag
     ${PROJECT_SOURCE_DIR}/shaders/hero.frag
     ${PROJECT_SOURCE_DIR}/shaders/item.frag
     ${PROJECT_SOURCE_DIR}/shaders/map.frag

@@ -29,6 +29,7 @@ struct Shapes {
     gamelib::draw::ShapeId sky;
     gamelib::draw::ShapeId bushes;
     gamelib::draw::ShapeId map;
+    gamelib::draw::ShapeId far;
 
     [[nodiscard]] static Shapes registerWith(gamelib::gfx::Renderer& renderer);
 };
