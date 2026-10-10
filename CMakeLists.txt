@@ -1,4 +1,7 @@
-# Bounder - a game built on GameLib.
+# Bounder - a side-scrolling platformer campaign built on GameLib: four
+# worlds of levels and fortresses on overworld maps, then the final castle;
+# a cartoon hero, enemies and tiles drawn by shaders, synthesized sounds and
+# music, a deterministic fixed-tick simulation.
 cmake_minimum_required(VERSION 3.28)
 
 # C is enabled too because GameLib's dependencies (GLFW, miniaudio) are C.
@@ -34,16 +37,13 @@ if(GIT_FOUND)
     message(STATUS "Bounder: using GameLib ${_gamelib_revision} from ${gamelib_SOURCE_DIR}")
 endif()
 
-add_executable(bounder src/main.cpp)
-target_link_libraries(bounder PRIVATE GameLib::app GameLib::fx)
-gamelib_target_warnings(bounder)
-gamelib_copy_runtime(bounder)
-# The game's own procedural shapes, embedded as SPIR-V.
-gamelib_add_shaders(bounder SHADERS shaders/orb.frag)
+add_subdirectory(src)
+
 
 # Smoke test: launch, render 120 frames with the validation layer required,
 # exit cleanly. Exit code 77 (no Vulkan GPU) counts as skipped. The profile
-# file goes to the build folder, not the player's.
+# file goes to the build folder, not the player's. Bounder has no other
+# tests (see AGENTS.md).
 enable_testing()
 gamelib_validation_layer_dir(_layer_dir)
 add_test(NAME bounder_smoke COMMAND bounder --hidden --require-validation --frames 120)
