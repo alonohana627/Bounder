@@ -12,6 +12,12 @@ namespace bounder::game {
 
 using Segment = std::vector<std::string_view>;
 
+// Shared segments: the end of an outdoor level (a staircase, the goal pole
+// and room to walk into the castle) and a boss arena (its gate column 'z',
+// the boss 'Z', two ledges).
+extern const Segment kGoalSegment;
+extern const Segment kArenaSegment;
+
 [[nodiscard]] std::vector<LevelDef> worldOneLevels();
 [[nodiscard]] std::vector<LevelDef> worldTwoLevels();
 [[nodiscard]] std::vector<LevelDef> worldThreeLevels();

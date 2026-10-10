@@ -29,23 +29,6 @@ const Segment kFortStart{
     R"(####################)",
 };
 
-const Segment kFortArena{
-    R"(##############################)",
-    R"(##############################)",
-    R"(.z............................)",
-    R"(.z............................)",
-    R"(.z............................)",
-    R"(.z............................)",
-    R"(.z............................)",
-    R"(.z............................)",
-    R"(.z............................)",
-    R"(.z.....XX..............XX.....)",
-    R"(.z............................)",
-    R"(.z............................)",
-    R"(.z......................Z.....)",
-    R"(##############################)",
-    R"(##############################)",
-};
 
 std::vector<LevelDef> _world(const int world)
 {
@@ -72,7 +55,7 @@ LevelDef placeholderFortress(const std::string_view id, const int world)
 {
     (void)world;
     return {.id = id, .name = "STONE KEEP", .theme = Theme::Fortress, .time = 300,
-            .areas = {joinSegments(id, Theme::Fortress, {kFortStart, kFortArena})}};
+            .areas = {joinSegments(id, Theme::Fortress, {kFortStart, kArenaSegment})}};
 }
 
 std::vector<LevelDef> worldTwoLevels() { return _world(1); }
