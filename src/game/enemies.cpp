@@ -1,7 +1,7 @@
 // The enemies of a level: walkers, shell walkers and their shells, hoppers,
 // fliers, plants in pipes and spikies - each a small rule on GameLib's
-// enemy movement helpers (patrolTurn, ledgeAhead, everyTicks, sinePath) and
-// moveBox - and what happens when the hero meets them (stomp, kick, hurt).
+// enemy movement helpers (stepWalker, everyTicks, sinePath) - and what
+// happens when the hero meets them (stomp, kick, hurt).
 
 #include "session.hpp"
 
@@ -144,20 +144,23 @@ void Session::stepEnemy(Enemy& e)
         stepBoss(e);
         return;
     }
-    const auto fall = [&] {
-        e.velocity.y = std::min(e.velocity.y + kEnemyGravity, kEnemyMaxFall);
-        const gamelib::core::BoxMove move = gamelib::core::moveBox(e.box, e.velocity, world);
-        e.box = move.box;
-        e.grounded = move.contacts.ground;
-        if (move.contacts.blockedY) {
-            e.velocity.y = 0.0f;
-        }
-        return move.contacts;
+    // One tick of walking and falling through the tiles (GameLib's walker):
+    // speed 0 keeps the enemy's own velocity.x (flipped at walls).
+    const auto walk = [&](const float speed, const bool turnAtLedges = false) {
+        gamelib::core::WalkerBody body{.box = e.box, .velocity = e.velocity, .direction = e.dir, .grounded = e.grounded};
+        const gamelib::core::WalkerStep step = gamelib::core::stepWalker(
+            body, {.gravity = kEnemyGravity, .maxFall = kEnemyMaxFall, .speed = speed, .turnAtLedges = turnAtLedges, .ledgeProbe = 2.0f},
+            world);
+        e.box = body.box;
+        e.velocity = body.velocity;
+        e.dir = body.direction;
+        e.grounded = body.grounded;
+        return step;
     };
 
     if (e.state == EnemyState::ShellIdle) {
         e.velocity.x = 0.0f;
-        fall();
+        (void)walk(0.0f);
         if (e.timer >= kShellReviveTicks) {
             e.state = EnemyState::Walking;
             e.timer = 0;
@@ -168,11 +171,9 @@ void Session::stepEnemy(Enemy& e)
     }
     if (e.state == EnemyState::ShellSliding) {
         e.kickGrace = std::max(0, e.kickGrace - 1);
-        e.velocity.x = static_cast<float>(e.dir) * kShellSpeed;
-        const gamelib::core::TileContacts contacts = fall();
-        if (contacts.blockedX) {
-            // A wall: bounce back, and knock a block in it like a head would.
-            const float x = e.dir > 0 ? e.box.right() + 1.0f : e.box.left() - 1.0f;
+        if (walk(kShellSpeed).contacts.blockedX) {
+            // A wall (the shell has already turned): knock a block in it like a head would.
+            const float x = e.dir < 0 ? e.box.right() + 1.0f : e.box.left() - 1.0f;
             const gamelib::core::Cell cell = gamelib::core::cellAt({x, e.box.center().y}, kTile);
             const gamelib::core::TileLayer& layer = currentArea().map.layer(0);
             if (layer.inside(cell)) {
@@ -186,7 +187,6 @@ void Session::stepEnemy(Enemy& e)
                     m_events.push({.kind = EventKind::BlockBump, .at = {x, e.box.center().y}, .value = 0});
                 }
             }
-            e.dir = -e.dir;
         }
         shellHits(e);
         return;
@@ -197,14 +197,8 @@ void Session::stepEnemy(Enemy& e)
     case EnemyKind::Shell:
     case EnemyKind::RedShell:
     case EnemyKind::Spiky: {
-        if (e.kind == EnemyKind::RedShell && e.grounded) {
-            // Red shells never walk off their platform.
-            e.dir = gamelib::core::patrolTurn(e.box, e.dir, world, true, 2.0f);
-        }
-        e.velocity.x = static_cast<float>(e.dir) * (e.kind == EnemyKind::Spiky ? 0.45f : kWalkerSpeed);
-        if (fall().blockedX) {
-            e.dir = -e.dir;
-        }
+        // Red shells never walk off their platform.
+        (void)walk(e.kind == EnemyKind::Spiky ? 0.45f : kWalkerSpeed, e.kind == EnemyKind::RedShell);
         break;
     }
     case EnemyKind::Hopper: {
@@ -217,10 +211,7 @@ void Session::stepEnemy(Enemy& e)
                 e.grounded = false;
             }
         }
-        if (fall().blockedX) {
-            e.dir = -e.dir;
-            e.velocity.x = -e.velocity.x;
-        }
+        (void)walk(0.0f);
         break;
     }
     case EnemyKind::Flier: {

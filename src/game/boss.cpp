@@ -57,20 +57,17 @@ void Session::stepBoss(Enemy& e)
     const gamelib::core::TileWorld world = tileWorld();
     const Rect& hero = m_hero.body.box;
     e.hurtTicks = std::max(0, e.hurtTicks - 1);
+    // Walk and fall with the boss's own velocity (GameLib's walker turns it
+    // round at walls); true on the tick it lands.
     const auto fall = [&] {
-        e.velocity.y = std::min(e.velocity.y + kEnemyGravity, kEnemyMaxFall + 1.0f);
-        const bool wasGrounded = e.grounded;
-        const gamelib::core::BoxMove move = gamelib::core::moveBox(e.box, e.velocity, world);
-        e.box = move.box;
-        e.grounded = move.contacts.ground;
-        if (move.contacts.blockedY) {
-            e.velocity.y = 0.0f;
-        }
-        if (move.contacts.blockedX) {
-            e.dir = -e.dir;
-            e.velocity.x = 0.0f;
-        }
-        return e.grounded && !wasGrounded;
+        gamelib::core::WalkerBody body{.box = e.box, .velocity = e.velocity, .direction = e.dir, .grounded = e.grounded};
+        const gamelib::core::WalkerStep step =
+            gamelib::core::stepWalker(body, {.gravity = kEnemyGravity, .maxFall = kEnemyMaxFall + 1.0f}, world);
+        e.box = body.box;
+        e.velocity = body.velocity;
+        e.dir = body.direction;
+        e.grounded = body.grounded;
+        return step.landed;
     };
     const int towards = gamelib::core::directionTowards(e.box.center().x, hero.center().x, e.dir);
     auto& sm = e.boss;
@@ -166,15 +163,15 @@ void Session::stepBoss(Enemy& e)
             const Vec2 from{e.box.center().x + static_cast<float>(e.dir) * 14.0f, e.box.top() + 8.0f};
             const float dx = hero.center().x - from.x;
             Shots::Shot shot{.position = from,
-                             .velocity = {std::clamp(dx * 0.85f, -240.0f, 240.0f) + fan * 40.0f, -230.0f},
+                             .velocity = {std::clamp(dx * 0.85f, -240.0f, 240.0f) / 60.0f + fan * 0.67f, -3.85f},
                              .size = {9.0f, 9.0f},
                              .lifetimeTicks = 260,
                              .team = 1,
                              .owner = 1,
                              .damage = 1,
                              .tileContact = gamelib::core::TileContact::BounceOnFloor,
-                             .gravity = 520.0f,
-                             .bounceSpeed = 150.0f,
+                             .gravity = 0.145f,
+                             .bounceSpeed = 2.5f,
                              .maxBounces = 2,
                              .extra = {.boss = true}};
             if (m_shots.spawn(shot) != 0) {

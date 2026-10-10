@@ -21,6 +21,7 @@
 #include <array>
 #include <cmath>
 #include <numbers>
+#include <vector>
 
 namespace bounder::app {
 
@@ -263,32 +264,14 @@ void LevelView::drawTiles(gamelib::draw::DrawList& list, const Shapes& shapes, c
     const gamelib::core::View2D view = m_camera.view();
     const Rect visible = view.visibleWorld(m_canvas).expanded(kTile);
     list.setLayer(gamelib::draw::layers::TilesBehind);
-    if (area.bumps.empty()) {
-        gamelib::draw::drawTiles(list, area.map, 0, tiles, visible);
-        return;
-    }
-    // Bumped blocks hop: draw the layer without them, then each one raised.
-    gamelib::core::TileLayer layer = area.map.layer(0);
+    // Bumped blocks hop up and back down over 12 ticks.
+    std::vector<gamelib::draw::TileOffset> offsets;
+    offsets.reserve(area.bumps.size());
     for (const game::Bump& bump : area.bumps) {
-        layer.at(bump.cell) = ' ';
-    }
-    gamelib::draw::drawTiles(list, layer, kTile, tiles, visible);
-    for (const game::Bump& bump : area.bumps) {
-        const gamelib::core::TileId id = area.map.layer(0).at(bump.cell);
-        const gamelib::draw::TileStyle* style = tiles.find(id);
-        if (style == nullptr) {
-            continue;
-        }
         const float t = static_cast<float>(bump.ticks) / 12.0f;
-        const float lift = std::sin(t * kPi) * 5.0f;
-        Rect rect = gamelib::core::cellRect(bump.cell, kTile);
-        rect.y -= lift;
-        list.add({.rect = rect, .color = style->color, .color2 = style->color2, .shape = style->shape,
-                  .params = style->params,
-                  .bits = (static_cast<std::uint64_t>(gamelib::draw::tileVariant(bump.cell)) << 8)
-                          | (static_cast<std::uint64_t>(static_cast<std::uint16_t>(bump.cell.x)) << 32)
-                          | (static_cast<std::uint64_t>(static_cast<std::uint16_t>(bump.cell.y)) << 48)});
+        offsets.push_back({.cell = bump.cell, .offset = {0.0f, -std::sin(t * kPi) * 5.0f}});
     }
+    gamelib::draw::drawTiles(list, area.map, 0, tiles, visible, {.offsets = offsets});
 }
 
 void LevelView::drawFurniture(gamelib::draw::DrawList& list, const Shapes& shapes, const game::Session& session,
@@ -320,11 +303,11 @@ void LevelView::drawFurniture(gamelib::draw::DrawList& list, const Shapes& shape
     list.setLayer(gamelib::draw::layers::Entities - 20);
     for (const game::Platform& p : area.platforms) {
         const Rect box = _lerp(p.previous, p.box, alpha);
-        const float shakeAmount = p.falling ? std::min(1.0f, static_cast<float>(p.standTicks) / 14.0f) : 0.0f;
+        const float shakeAmount = p.falling ? std::min(1.0f, static_cast<float>(p.drop.standTicks) / 14.0f) : 0.0f;
         Rect drawn = box;
         drawn.height = kTile * 0.6f;
-        if (p.falling && !p.dropping && p.standTicks > 0) {
-            drawn.x += std::sin(static_cast<float>(p.standTicks) * 2.3f) * 0.7f;
+        if (p.falling && !p.drop.dropping && p.drop.standTicks > 0) {
+            drawn.x += std::sin(static_cast<float>(p.drop.standTicks) * 2.3f) * 0.7f;
         }
         list.add({.rect = drawn, .color = p.falling ? gamelib::core::srgb(0xD98A3A) : pal[Role::PlatformTop],
                   .color2 = gamelib::core::srgb(0x5A4A3A), .shape = shapes.scenery,

@@ -17,17 +17,19 @@
 #include <gamelib/core/combat.hpp>
 #include <gamelib/core/event_queue.hpp>
 #include <gamelib/core/math.hpp>
+#include <gamelib/core/pipes.hpp>
 #include <gamelib/core/platformer.hpp>
+#include <gamelib/core/platforms.hpp>
 #include <gamelib/core/projectiles.hpp>
 #include <gamelib/core/rng.hpp>
 #include <gamelib/core/slot_map.hpp>
 #include <gamelib/core/state_machine.hpp>
 #include <gamelib/core/tile_collision.hpp>
 #include <gamelib/core/tile_map.hpp>
-#include <gamelib/core/waypoint_path.hpp>
 
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <vector>
 
 namespace bounder::game {
@@ -107,27 +109,18 @@ struct Item {
     int age = 0;
 };
 
-// A pipe the hero enters by holding down while standing on its top (cell =
-// the top's left tile), and leaves by rising out of the target pipe.
-struct PipeLink {
-    gamelib::core::Cell top;
-    int targetArea = 0;
-    gamelib::core::Cell targetTop;
-};
-
 inline constexpr float kPlatformSpeed = 0.7f; // units per tick along a rail
 
+// A lift on a rail or a platform that drops once stood on (GameLib's Rail
+// and FallingPlatform); `box` is where it is this tick.
 struct Platform {
-    gamelib::core::WaypointPath path; // the rail (top-left corner positions); no points: a falling platform
-    float startOffset = 0.0f;         // where on the rail it starts
+    gamelib::core::Rail rail;            // a lift's rail
+    gamelib::core::FallingPlatform drop; // a falling platform's state
+    bool falling = false;
     gamelib::core::Rect box;
     gamelib::core::Rect previous;
     gamelib::core::Vec2 delta;
     int id = 0;
-    bool falling = false;  // a falling platform...
-    int standTicks = 0;    // ...stood on this long...
-    bool dropping = false; // ...and now dropping
-    float fallSpeed = 0.0f;
 };
 
 struct Bump {
@@ -161,7 +154,6 @@ struct Area {
     std::vector<Platform> platforms;
     std::vector<Bump> bumps;
     std::vector<CoinBrick> coinBricks;
-    std::vector<PipeLink> pipes;
     gamelib::core::Cell checkpoint{-1, -1};
     gamelib::core::Cell goal{-1, -1};
     Theme theme = Theme::Grass;
@@ -259,8 +251,8 @@ public:
     // The boss arena (world units) once the hero entered it and it closed.
     [[nodiscard]] std::optional<gamelib::core::Rect> lockedArena() const;
     [[nodiscard]] const Enemy* boss() const;
-    // The pipe the hero is in during PipeIn / PipeOut.
-    [[nodiscard]] gamelib::core::Vec2 pipeCenter() const { return m_pipeCenter; }
+    // Every pipe of the level (all areas): where it is and where it leads.
+    [[nodiscard]] std::span<const gamelib::core::PipeLink> pipes() const { return m_pipes; }
 
     [[nodiscard]] gamelib::core::EventQueue<Event>& events() { return m_events; }
     [[nodiscard]] std::uint64_t hash() const;
@@ -292,7 +284,7 @@ private:
     void addChainPoints(int& chain, gamelib::core::Vec2 at);
     void addCoin(gamelib::core::Vec2 at);
     void addLife(gamelib::core::Vec2 at);
-    void enterPipe(const PipeLink& link);
+    void enterPipe(const gamelib::core::PipeLink& link);
     void linkPipes();
     void goalTick(const Input& input);
     void dyingTick();
@@ -331,9 +323,9 @@ private:
     float m_goalFlag = 0.0f;
     bool m_arenaClosed = false;
     int m_arenaColumn = -1; // the boss arena's gate column (a 'z' marker), -1 without a boss
-    // Pipes: the link being used and where the hero is going.
-    std::optional<PipeLink> m_pipe;
-    gamelib::core::Vec2 m_pipeCenter;
+    // Pipes: every link of the level (all areas) and the trip through one.
+    std::vector<gamelib::core::PipeLink> m_pipes;
+    gamelib::core::PipeTransit m_transit{kPipeTicks};
     gamelib::core::EventQueue<Event> m_events;
 };
 

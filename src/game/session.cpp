@@ -1,6 +1,7 @@
 #include "session.hpp"
 
 #include <gamelib/core/collision.hpp>
+#include <gamelib/core/enemy_motion.hpp>
 #include <gamelib/core/replay.hpp>
 #include <gamelib/core/world_graph.hpp>
 
@@ -20,12 +21,17 @@ using gamelib::core::Rect;
 using gamelib::core::TileShape;
 using gamelib::core::Vec2;
 
-constexpr float kTickSeconds = 1.0f / static_cast<float>(kTickRate);
 constexpr int kBumpTicks = 12;
 constexpr int kCoinBrickTicks = 240; // a multi-coin brick runs dry this long after its first coin
 constexpr float kPoleHeight = 9.5f * kTile;
 constexpr int kGoalWalkTicks = 110;
 constexpr int kBossDownTicks = 150;
+
+// The mouth of a two-tile pipe whose top-left tile is `top`.
+Vec2 _mouth(const Cell top)
+{
+    return {static_cast<float>(top.x + 1) * kTile, static_cast<float>(top.y) * kTile};
+}
 
 const gamelib::core::TileShapes& _shapes()
 {
@@ -46,25 +52,6 @@ const gamelib::core::TileShapes& _shapes()
 Rect _boxAt(const Vec2 feet, const Vec2 size)
 {
     return {feet.x - size.x / 2.0f, feet.y - size.y, size.x, size.y};
-}
-
-// Fireballs and boss shots: solid tiles, slopes as their whole cell, and
-// one-way platforms from above only (a shot's box just entering the top).
-bool _shotSolid(const gamelib::core::TileWorld& world, const Rect& box)
-{
-    const gamelib::core::CellRange cells = gamelib::core::cellsOverlapping(box, kTile);
-    for (int y = cells.min.y; y <= cells.max.y; ++y) {
-        for (int x = cells.min.x; x <= cells.max.x; ++x) {
-            const TileShape shape = world.shapeAt({x, y});
-            if (shape == TileShape::Solid || gamelib::core::isRamp(shape)) {
-                return true;
-            }
-            if (shape == TileShape::OneWay && box.bottom() - static_cast<float>(y) * kTile < 4.0f) {
-                return true;
-            }
-        }
-    }
-    return false;
 }
 
 } // namespace
@@ -128,30 +115,15 @@ void Session::loadAreas()
             case 'w': {
                 const Rect box{static_cast<float>(marker.cell.x) * kTile, static_cast<float>(marker.cell.y) * kTile,
                                3.0f * kTile, kTile * 0.5f};
-                area.platforms.push_back({.box = box, .previous = box, .id = static_cast<int>(area.platforms.size()),
-                                          .falling = true});
+                area.platforms.push_back({.drop = {.box = box}, .falling = true, .box = box, .previous = box,
+                                          .id = static_cast<int>(area.platforms.size())});
                 break;
             }
             case 'm': {
                 // The rail through the marker: '-' to either side, or '|' above and below.
-                const gamelib::core::TileLayer& rails = area.map.layer(0);
-                const auto railAt = [&](const Cell c, const gamelib::core::TileId id) { return rails.inside(c) && rails.at(c) == id; };
-                Cell low = marker.cell;
-                Cell high = marker.cell;
-                while (railAt({low.x - 1, low.y}, '-')) --low.x;
-                while (railAt({high.x + 1, high.y}, '-')) ++high.x;
-                if (low == high) {
-                    while (railAt({low.x, low.y - 1}, '|')) --low.y;
-                    while (railAt({high.x, high.y + 1}, '|')) ++high.y;
-                } else {
-                    high.x = std::max(low.x, high.x - 2); // the left end travels; the platform is 3 wide
-                }
-                const Vec2 from{static_cast<float>(low.x) * kTile, static_cast<float>(low.y) * kTile};
-                const Vec2 to{static_cast<float>(high.x) * kTile, static_cast<float>(high.y) * kTile};
-                const Vec2 start{static_cast<float>(marker.cell.x) * kTile, static_cast<float>(marker.cell.y) * kTile};
-                const Rect box{start.x, start.y, 3.0f * kTile, kTile * 0.5f};
-                area.platforms.push_back({.path = {.points = {from, to}, .end = gamelib::core::Loop::PingPong},
-                                          .startOffset = gamelib::core::length(start - from),
+                const Rect box{static_cast<float>(marker.cell.x) * kTile, static_cast<float>(marker.cell.y) * kTile,
+                               3.0f * kTile, kTile * 0.5f};
+                area.platforms.push_back({.rail = gamelib::core::railFrom(area.map.layer(0), marker.cell, '-', '|', 3, kTile),
                                           .box = box, .previous = box, .id = static_cast<int>(area.platforms.size())});
                 break;
             }
@@ -198,9 +170,10 @@ void Session::linkPipes()
         if (arrive.empty()) {
             throw std::logic_error{"Bounder: a bonus room without an arrival pipe"};
         }
-        m_areas.front().pipes.push_back({.top = entrances[k], .targetArea = static_cast<int>(k + 1), .targetTop = arrive.front()});
+        const int roomIndex = static_cast<int>(k + 1);
+        m_pipes.push_back({.area = 0, .mouth = _mouth(entrances[k]), .targetArea = roomIndex, .targetMouth = _mouth(arrive.front())});
         if (!leave.empty() && k < returns.size()) {
-            room.pipes.push_back({.top = leave.front(), .targetArea = 0, .targetTop = returns[k]});
+            m_pipes.push_back({.area = roomIndex, .mouth = _mouth(leave.front()), .targetArea = 0, .targetMouth = _mouth(returns[k])});
         }
     }
 }
@@ -315,31 +288,21 @@ void Session::tick(const Input& input)
             m_phaseTicks = 0;
         }
         break;
-    case Phase::PipeIn: {
+    case Phase::PipeIn:
+    case Phase::PipeOut: {
         Rect& box = m_hero.body.box;
-        box.y += (box.height + 2.0f) / static_cast<float>(kPipeTicks);
-        if (m_phaseTicks >= kPipeTicks && m_pipe) {
-            m_area = m_pipe->targetArea;
+        const gamelib::core::PipeTransit::Tick t = m_transit.tick(box);
+        if (t.switchArea) {
+            m_area = m_transit.link().targetArea;
             m_shots.clear();
-            const Vec2 top = currentArea().map.cellBottom(m_pipe->targetTop) + Vec2{kTile / 2.0f, -kTile};
-            m_pipeCenter = top;
-            box.x = top.x - box.width / 2.0f;
-            box.y = top.y + 2.0f;
             m_hero.previous = box;
             m_phase = Phase::PipeOut;
             m_phaseTicks = 0;
-            m_events.push({.kind = EventKind::PipeOut, .at = top});
+            m_events.push({.kind = EventKind::PipeOut, .at = m_transit.mouth()});
         }
-        break;
-    }
-    case Phase::PipeOut: {
-        Rect& box = m_hero.body.box;
-        box.y -= (box.height + 2.0f) / static_cast<float>(kPipeTicks);
-        if (m_phaseTicks >= kPipeTicks) {
-            box.y = m_pipeCenter.y - box.height;
+        if (t.done) {
             m_hero.body.velocity = {};
             m_hero.body.grounded = true;
-            m_pipe.reset();
             m_phase = Phase::Playing;
             m_phaseTicks = 0;
         }
@@ -420,25 +383,20 @@ void Session::stepPlatforms()
 {
     Area& area = currentArea();
     for (Platform& p : area.platforms) {
-        p.delta = {};
         if (p.falling) {
-            if (m_hero.body.ridingId == p.id && m_hero.body.grounded) {
-                if (++p.standTicks == 14) {
-                    p.dropping = true;
-                    m_events.push({.kind = EventKind::PlatformDrop, .at = p.box.center()});
-                }
+            const bool ridden = m_hero.body.ridingId == p.id && m_hero.body.grounded;
+            const gamelib::core::FallingPlatform::Step step =
+                p.drop.step(ridden, {.delayTicks = 14, .acceleration = 0.08f, .maxSpeed = 3.0f});
+            if (step.dropped) {
+                m_events.push({.kind = EventKind::PlatformDrop, .at = p.box.center()});
             }
-            if (p.dropping) {
-                p.fallSpeed = std::min(p.fallSpeed + 0.08f, 3.0f);
-                p.delta = {0.0f, p.fallSpeed};
-            }
-        } else if (!p.path.points.empty()) {
-            const double distance = static_cast<double>(p.startOffset)
-                                    + static_cast<double>(kPlatformSpeed) * static_cast<double>(m_ticks);
-            p.delta = p.path.pointAt(distance) - p.box.position();
+            p.delta = step.delta;
+            p.box = p.drop.box;
+        } else {
+            p.delta = p.rail.at(static_cast<double>(kPlatformSpeed) * static_cast<double>(m_ticks)) - p.box.position();
+            p.box.x += p.delta.x;
+            p.box.y += p.delta.y;
         }
-        p.box.x += p.delta.x;
-        p.box.y += p.delta.y;
     }
     std::erase_if(area.platforms, [&](const Platform& p) { return p.box.top() > area.map.bounds().bottom() + 2.0f * kTile; });
 }
@@ -543,64 +501,41 @@ void Session::hitBlockAbove(const float topBefore, const float vyBefore, const b
     gamelib::core::PlatformerBody& body = m_hero.body;
     Area& area = currentArea();
     gamelib::core::TileLayer& layer = area.map.layer(0);
-    const float centerX = body.box.center().x;
-    const int column = static_cast<int>(std::floor(centerX / kTile));
 
     // A hidden block reveals itself when the head passes into it from below.
-    if (vyBefore < 0.0f && topBefore > body.box.top()) {
-        const int firstRow = static_cast<int>(std::floor(body.box.top() / kTile));
-        const int lastRow = static_cast<int>(std::floor((topBefore - 0.01f) / kTile));
-        for (int row = lastRow; row >= firstRow; --row) {
-            const Cell cell{column, row};
-            if (!layer.inside(cell)) {
-                continue;
+    if (vyBefore < 0.0f) {
+        const auto hidden = [](const gamelib::core::TileId id) { return id == 'h' || id == 'H'; };
+        if (const std::optional<Cell> cell = gamelib::core::hiddenEntered(topBefore, body.box, layer, kTile, hidden)) {
+            const gamelib::core::TileId id = layer.at(*cell);
+            layer.at(*cell) = 'u';
+            body.box.y = gamelib::core::cellRect(*cell, kTile).bottom();
+            body.velocity.y = 0.0f;
+            body.rising = false;
+            area.bumps.push_back({.cell = *cell});
+            const Vec2 top{(static_cast<float>(cell->x) + 0.5f) * kTile, static_cast<float>(cell->y) * kTile};
+            if (id == 'h') {
+                addCoin(top);
+                m_events.push({.kind = EventKind::Coin, .at = top, .value = 1});
+                addPoints(200, top);
+            } else {
+                const Rect box{top.x - 6.0f, top.y + 2.0f, 12.0f, 12.0f};
+                area.items.push_back({.kind = ItemKind::OneUp, .box = box, .previous = box, .rise = kItemRiseTicks});
+                m_events.push({.kind = EventKind::ItemSpawn, .at = top, .item = ItemKind::OneUp});
             }
-            const gamelib::core::TileId id = layer.at(cell);
-            if ((id == 'h' || id == 'H') && static_cast<float>(row + 1) * kTile <= topBefore + 0.01f) {
-                layer.at(cell) = 'u';
-                body.box.y = static_cast<float>(row + 1) * kTile;
-                body.velocity.y = 0.0f;
-                body.rising = false;
-                area.bumps.push_back({.cell = cell});
-                const Vec2 top{(static_cast<float>(column) + 0.5f) * kTile, static_cast<float>(row) * kTile};
-                if (id == 'h') {
-                    addCoin(top);
-                    m_events.push({.kind = EventKind::Coin, .at = top, .value = 1});
-                    addPoints(200, top);
-                } else {
-                    const Rect box{top.x - 6.0f, top.y + 2.0f, 12.0f, 12.0f};
-                    area.items.push_back({.kind = ItemKind::OneUp, .box = box, .previous = box, .rise = kItemRiseTicks});
-                    m_events.push({.kind = EventKind::ItemSpawn, .at = top, .item = ItemKind::OneUp});
-                }
-                bumpAbove(cell);
-                return;
-            }
+            bumpAbove(*cell);
+            return;
         }
     }
     if (!hitHead) {
         return;
     }
-    // The block right above the head: the column under the center first.
-    const int row = static_cast<int>(std::floor((body.box.top() - 0.5f) / kTile));
-    const int left = static_cast<int>(std::floor((body.box.left() + 0.01f) / kTile));
-    const int right = static_cast<int>(std::floor((body.box.right() - 0.01f) / kTile));
-    const auto isBlock = [&](const Cell c) {
-        if (!layer.inside(c)) {
-            return false;
-        }
-        const gamelib::core::TileId id = layer.at(c);
-        return id == '?' || id == 'P' || id == '*' || id == 'B' || id == 'C';
-    };
-    Cell target{column, row};
-    if (!isBlock(target)) {
-        const Cell other{column == left ? right : left, row};
-        if (isBlock(other)) {
-            target = other;
-        }
-    }
-    hitBlock(target);
+    // The block the head is mostly under; anything else above just knocks.
+    const auto block = [](const gamelib::core::TileId id) { return id == '?' || id == 'P' || id == '*' || id == 'B' || id == 'C'; };
+    const std::optional<Cell> target = gamelib::core::blockAbove(body.box, layer, kTile, block);
+    hitBlock(target ? *target
+                    : Cell{static_cast<int>(std::floor(body.box.center().x / kTile)),
+                           gamelib::core::cellsAbove(body.box, kTile).min.y});
 }
-
 void Session::hitBlock(const Cell cell)
 {
     Area& area = currentArea();
@@ -741,30 +676,21 @@ void Session::checkPipes(const Input& input)
     if (!input.down || !m_hero.body.grounded) {
         return;
     }
-    const Rect& box = m_hero.body.box;
-    for (const PipeLink& link : currentArea().pipes) {
-        const float left = static_cast<float>(link.top.x) * kTile;
-        const float top = static_cast<float>(link.top.y) * kTile;
-        if (std::abs(box.bottom() - top) < 0.5f && box.center().x >= left + 5.0f && box.center().x <= left + 2.0f * kTile - 5.0f) {
-            enterPipe(link);
-            return;
-        }
+    if (const gamelib::core::PipeLink* link = gamelib::core::pipeUnder(m_hero.body.box, m_pipes, m_area, kTile - 5.0f)) {
+        enterPipe(*link);
     }
 }
 
-void Session::enterPipe(const PipeLink& link)
+void Session::enterPipe(const gamelib::core::PipeLink& link)
 {
-    m_pipe = link;
     m_phase = Phase::PipeIn;
     m_phaseTicks = 0;
-    const float left = static_cast<float>(link.top.x) * kTile;
-    m_pipeCenter = {left + kTile, static_cast<float>(link.top.y) * kTile};
-    m_hero.body.box.x = m_pipeCenter.x - m_hero.body.box.width / 2.0f;
+    m_transit.start(link, m_hero.body.box);
     m_hero.previous = m_hero.body.box;
     m_hero.body.velocity = {};
     m_hero.body.ridingId = -1;
     m_shots.clear();
-    m_events.push({.kind = EventKind::PipeIn, .at = m_pipeCenter});
+    m_events.push({.kind = EventKind::PipeIn, .at = link.mouth});
 }
 
 void Session::checkCheckpointAndGoal()
@@ -845,15 +771,15 @@ void Session::throwFireball()
     const Rect& box = m_hero.body.box;
     const float dir = static_cast<float>(m_hero.body.facing);
     Shots::Shot shot{.position = {box.center().x + dir * 6.0f, box.top() + 10.0f},
-                     .velocity = {dir * 270.0f, 60.0f},
+                     .velocity = {dir * 4.5f, 1.0f},
                      .size = {7.0f, 7.0f},
                      .lifetimeTicks = 300,
                      .team = 0,
                      .owner = 0,
                      .damage = 1,
                      .tileContact = gamelib::core::TileContact::BounceOnFloor,
-                     .gravity = 1100.0f,
-                     .bounceSpeed = 200.0f};
+                     .gravity = 0.3f,
+                     .bounceSpeed = 3.3f};
     if (m_shots.spawn(shot, 2) != 0) {
         m_hero.throwTicks = 10;
         m_events.push({.kind = EventKind::Fireball, .at = shot.position});
@@ -863,7 +789,7 @@ void Session::throwFireball()
 void Session::stepShots()
 {
     const gamelib::core::TileWorld world = tileWorld();
-    m_shots.step(kTickSeconds, [&](const Rect& r) { return _shotSolid(world, r); }, map().bounds());
+    m_shots.step(1.0f, gamelib::core::shotSolid(world), map().bounds()); // speeds per tick
     for (const auto& removed : m_shots.removed()) {
         if (removed.reason == gamelib::core::ProjectileEnd::HitSolid) {
             m_events.push({.kind = EventKind::FireballPop, .at = removed.projectile.position});
@@ -910,20 +836,16 @@ void Session::stepItems()
         if (item.kind == ItemKind::Flower) {
             continue;
         }
-        const float speed = item.kind == ItemKind::Star ? 1.3f : 1.0f;
-        item.velocity.x = static_cast<float>(item.dir) * speed;
-        item.velocity.y = std::min(item.velocity.y + kEnemyGravity, kEnemyMaxFall);
-        const gamelib::core::BoxMove move = gamelib::core::moveBox(item.box, item.velocity, world);
-        item.box = move.box;
-        if (move.contacts.blockedX) {
-            item.dir = -item.dir;
-        }
-        if (move.contacts.blockedY) {
-            item.velocity.y = 0.0f;
-        }
-        if (item.kind == ItemKind::Star && move.contacts.ground) {
-            item.velocity.y = -4.0f;
-        }
+        // Mushrooms walk and turn at walls; the star bounces along.
+        const bool star = item.kind == ItemKind::Star;
+        gamelib::core::WalkerBody body{.box = item.box, .velocity = item.velocity, .direction = item.dir};
+        (void)gamelib::core::stepWalker(body,
+                                        {.gravity = kEnemyGravity, .maxFall = kEnemyMaxFall, .speed = star ? 1.3f : 1.0f,
+                                         .bounce = star ? 4.0f : 0.0f},
+                                        world);
+        item.box = body.box;
+        item.velocity = body.velocity;
+        item.dir = body.direction;
     }
     // Taking an item.
     for (auto it = area.items.begin(); it != area.items.end();) {
