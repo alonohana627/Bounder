@@ -353,9 +353,10 @@ void Session::tick(const Input& input)
         const gamelib::core::PlatformerTuning t = tuningFor(false, m_hero.body.velocity.x, false, false);
         (void)gamelib::core::stepPlatformer(m_hero.body, {}, t, tileWorld());
         if (m_phaseTicks >= kBossDownTicks) {
-            addPoints(m_time * kTimeBonusPerUnit, m_hero.body.box.center() + Vec2{0.0f, -20.0f});
+            const int bonus = m_time * kTimeBonusPerUnit;
+            addPoints(bonus, m_hero.body.box.center() + Vec2{0.0f, -20.0f});
             m_time = 0;
-            m_events.push({.kind = EventKind::Clear, .at = m_hero.body.box.center()});
+            m_events.push({.kind = EventKind::Clear, .at = m_hero.body.box.center(), .value = bonus});
             m_outcome = Outcome::Cleared;
             m_phase = Phase::Over;
             m_phaseTicks = 0;
@@ -829,9 +830,10 @@ void Session::goalTick(const Input&)
     (void)step;
     m_hero.walked += std::abs(body.box.x - m_hero.previous.x);
     if (m_phaseTicks >= 56 + kGoalWalkTicks || body.box.left() > foot.x + 7.0f * kTile) {
-        addPoints(m_time * kTimeBonusPerUnit, body.box.center() + Vec2{0.0f, -24.0f});
+        const int bonus = m_time * kTimeBonusPerUnit;
+        addPoints(bonus, body.box.center() + Vec2{0.0f, -24.0f});
         m_time = 0;
-        m_events.push({.kind = EventKind::Clear, .at = body.box.center()});
+        m_events.push({.kind = EventKind::Clear, .at = body.box.center(), .value = bonus});
         m_outcome = Outcome::Cleared;
         m_phase = Phase::Over;
         m_phaseTicks = 0;

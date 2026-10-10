@@ -202,7 +202,7 @@ enum class EventKind {
     Checkpoint,
     StarCoin,     // value: index
     GoalTouch,    // value: points
-    Clear,
+    Clear,        // value: the time bonus
     Death,
     HurryUp,
     BossStart,

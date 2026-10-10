@@ -545,14 +545,14 @@ void BounderGame::react(gamelib::app::App& app, const game::Event& event)
         const gamelib::core::ClearResult result = progress.campaign.clear(
             levelId(m_level), {.score = m_session->levelPoints(), .found = m_session->starCoinMask()});
         progress.run = m_session->carry().run;
-        std::string line;
+        std::string line = "TIME BONUS " + std::to_string(event.value);
         if (result.newlyFound != 0) {
-            line = "STAR COINS FOUND";
+            line += "   STAR COINS FOUND";
         } else if (result.bestScore && !result.firstClear) {
-            line = "NEW BEST SCORE";
+            line += "   NEW BEST SCORE";
         }
         if (!result.unlocked.empty() && m_level != game::kCastleLevel) {
-            line += line.empty() ? "A NEW PATH OPENS" : "   A NEW PATH OPENS";
+            line += "   A NEW PATH OPENS";
         }
         m_banners.add({.title = m_level == game::kCastleLevel ? "THE KING IS BEATEN!" : "COURSE CLEAR!", .line = line,
                        .color = srgb(0xFFE14D)},
