@@ -278,7 +278,7 @@ Song song(const Tune tune, const bool hurry)
 {
     Song s = _song(tune);
     if (hurry) {
-        s.bpm *= 1.35f;
+        s.bpm *= 1.25f; // the hurry-up take: the same song a quarter faster
     }
     return s;
 }
