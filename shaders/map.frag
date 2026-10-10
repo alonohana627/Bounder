@@ -59,8 +59,8 @@ void main()
         part(sdRoundBox(p - vec2(0.0, s * 0.15), vec2(s * 0.62, s * 0.45), s * 0.3), base);
         fill(sdRoundBox(p - vec2(-s * 0.15, -s * 0.05), vec2(s * 0.3, s * 0.15), s * 0.12), accent);
     } else if (kind == 3) {
-        float wave = sin(world.x * 0.08 + sprite.time * 2.0) * sin(world.y * 0.1 - sprite.time * 1.3);
-        vec3 c = mix(base, accent, 0.5 + 0.5 * wave);
+        float wave = valueNoise(world * 0.025 + vec2(sprite.time * 0.15, 0.0)) * 0.7 + valueNoise(world * 0.07 - vec2(0.0, sprite.time * 0.2)) * 0.3;
+        vec3 c = mix(base, accent, smoothstep(0.35, 0.75, wave) * 0.6);
         outColor = vec4(c, 1.0);
         return;
     } else if (kind == 4) {

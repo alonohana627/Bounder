@@ -56,12 +56,19 @@ struct AreaDef {
     std::vector<std::string> rows; // the joined segments, '.' already turned into ' '
 };
 
+// A line of text written into the level's backdrop (the first level teaches the controls).
+struct Hint {
+    gamelib::core::Vec2 at; // tiles: the text's top center
+    std::string_view text;
+};
+
 struct LevelDef {
     std::string_view id;   // campaign id ("1-1", "1-F", "castle")
     std::string_view name;
     Theme theme = Theme::Grass;
     int time = 300;        // timer units (kTimeUnitTicks each)
     std::vector<AreaDef> areas; // area 0 is the level; the rest are bonus rooms
+    std::vector<Hint> hints;    // in area 0
 };
 
 [[nodiscard]] const std::vector<LevelDef>& levels();

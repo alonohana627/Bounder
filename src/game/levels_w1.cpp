@@ -165,7 +165,15 @@ LevelDef _level11()
             .time = 300,
             .areas = {joinSegments("1-1", Theme::Grass,
                                    {k11Start, k11Blocks, k11Pipes, k11Hidden, k11Hill, k11Bricks, k11High, kGoalSegment}),
-                      joinSegments("1-1 bonus", Theme::Bonus, {k11Bonus})}};
+                      joinSegments("1-1 bonus", Theme::Bonus, {k11Bonus})},
+            .hints = {{{5.0f, 5.0f}, "Arrows walk.  Hold X to run."},
+                      {{26.0f, 2.5f}, "Z jumps. Hold it to jump higher."},
+                      {{26.0f, 4.0f}, "Hit blocks from below."},
+                      {{40.0f, 5.5f}, "Jump on enemies to stomp them."},
+                      {{59.0f, 6.5f}, "Hold down on a pipe to enter it."},
+                      {{73.0f, 2.5f}, "Some blocks are hidden..."},
+                      {{88.0f, 3.5f}, "The flag saves your place."},
+                      {{176.0f, 1.0f}, "Touch the pole high up for more points."}}};
 }
 
 // 1-2 ROLLING MEADOW ---------------------------------------------------------

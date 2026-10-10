@@ -73,13 +73,15 @@ void drawMap(gamelib::draw::DrawList& list, const Shapes& shapes, const game::Wo
         return Rect{origin.x + static_cast<float>(c.x) * kCell, origin.y + static_cast<float>(c.y) * kCell, kCell, kCell};
     };
     list.setLayer(gamelib::draw::layers::TilesBehind);
-    const Color water{0.25f, 0.55f, 0.95f, 1.0f};
+    // Water, or in the sky world a sea of cloud.
+    const Color water = theme == game::Theme::Sky ? pal[Role::SkyLow] : Color{0.25f, 0.55f, 0.95f, 1.0f};
+    const Color waterLight = theme == game::Theme::Sky ? Color{1.0f, 1.0f, 1.0f, 1.0f} : water.scaled(1.4f);
     for (int y = 0; y < map.tiles.height(); ++y) {
         for (int x = 0; x < map.tiles.width(); ++x) {
             const Cell c{x, y};
             const char ch = map.tiles.at(c);
             if (ch == '~') {
-                list.add({.rect = cellRect(c), .color = water, .color2 = water.scaled(1.4f), .shape = shapes.map,
+                list.add({.rect = cellRect(c), .color = water, .color2 = waterLight, .shape = shapes.map,
                           .params = {3.0f, 0.0f, 0.0f, 0.0f}});
             } else {
                 list.add({.rect = cellRect(c), .color = pal[Role::MapGround], .color2 = pal[Role::MapDetail],
