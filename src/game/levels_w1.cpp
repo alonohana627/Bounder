@@ -173,7 +173,7 @@ LevelDef _level11()
                       {{59.0f, 6.5f}, "Hold down on a pipe to enter it."},
                       {{73.0f, 2.5f}, "Some blocks are hidden..."},
                       {{88.0f, 3.5f}, "The flag saves your place."},
-                      {{176.0f, 1.0f}, "Touch the pole high up for more points."}}};
+                      {{176.0f, 2.2f}, "Touch the pole high up for more points."}}};
 }
 
 // 1-2 ROLLING MEADOW ---------------------------------------------------------
