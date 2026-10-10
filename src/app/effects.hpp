@@ -43,7 +43,6 @@ public:
 
     [[nodiscard]] gamelib::core::Vec2 shake(float time) const { return m_shake.offset(time); }
     [[nodiscard]] gamelib::core::Vec2 heroScale() const { return m_squash.scale(); }
-    [[nodiscard]] float blink() const;
 
 private:
     struct Puff {
@@ -84,7 +83,6 @@ private:
     gamelib::fx::Shake m_shake{0.35f, 16.0f};
     gamelib::fx::SquashStretch m_squash{6.0f, 0.4f};
     gamelib::core::Rng m_rng;
-    float m_time = 0.0f;
 };
 
 } // namespace bounder::app

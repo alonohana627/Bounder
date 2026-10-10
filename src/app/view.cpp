@@ -363,9 +363,7 @@ void LevelView::drawActors(gamelib::draw::DrawList& list, const Shapes& shapes, 
     list.setLayer(gamelib::draw::layers::Entities);
     const float time = static_cast<float>(session.ticks()) / static_cast<float>(game::kTickRate);
     for (const auto [handle, e] : area.enemies) {
-        if (!e.awake && e.kind != game::EnemyKind::Brute && e.kind != game::EnemyKind::King) {
-            // Asleep enemies wait off screen; draw them anyway if visible.
-        }
+
         const EnemyLook look = _look(e);
         const Rect box = _lerp(e.previous, e.box, alpha);
         const float margin = 3.0f;

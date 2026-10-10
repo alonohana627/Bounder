@@ -171,7 +171,6 @@ void Effects::firework(const Vec2 at, const Color color)
 
 void Effects::update(const float seconds)
 {
-    m_time += seconds;
     m_debris.update(seconds);
     m_puffs.update(seconds);
     m_rings.update(seconds);
@@ -194,12 +193,6 @@ void Effects::clear()
     m_flash.clear();
     m_shake.clear();
     m_squash.reset();
-}
-
-float Effects::blink() const
-{
-    const float phase = std::fmod(m_time, 3.3f);
-    return phase < 0.14f ? std::sin(phase / 0.14f * kPi) : 0.0f;
 }
 
 void Effects::drawWorld(gamelib::draw::DrawList& list, const Shapes& shapes) const
